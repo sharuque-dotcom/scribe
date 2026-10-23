@@ -13,12 +13,14 @@ It's a Chrome/Edge extension with a built-in editor. Everything is stored in you
 - a written instruction, e.g. `Click the "Save" button` or `Type "Acme" into the "Company" field`
 - passwords and other secret fields (card numbers, API keys, tokens) blurred automatically. Their values never appear in step text.
 
+**Zoom.** Screenshots zoom in on what you clicked so field names and values are readable. The first step on each page stays full screen, so readers can see where they are. Later steps on that page zoom in on the clicked element and its label, at up to 3×, with a small full-page thumbnail in the corner marking the zoomed area. Large click areas, navigation and key presses stay full screen. Every step has an **Auto / Full screen / Zoom** switch, with a slider and *Move zoom area*. The **Screenshots** menu sets the rule for the whole guide (auto, always zoom, always full screen) and turns the thumbnail on or off. The original full screenshot is always kept. Claude is sent the full screenshots, so it can see the whole page.
+
 Clicking a field and then typing becomes one step, not two. A small bar on the page lets you pause or finish, and it never shows up in the screenshots.
 
 **Edit.** In the editor you can:
 
 - rewrite any step, add detail, reorder, delete (with undo), and insert manual steps, tips or warnings, and section headings
-- annotate screenshots with boxes, arrows, text labels, numbered markers, blur (pixelated redaction), spotlight (dims everything else) and crop
+- annotate screenshots with boxes, arrows, text labels, numbered markers, blur (pixelated redaction), spotlight (dims everything else) and a hand-drawn zoom area
 - upload a screenshot for a step you added by hand
 
 **Write SOPs and training.** Each guide has two document tabs:
@@ -66,7 +68,8 @@ src/
     background.ts   takes screenshots, writes steps, tracks recording state
   shared/
     describe.ts     turns an interaction into instruction text; detects secret fields; merges click+type
-    render.ts       draws a screenshot with crop, blur, highlight and annotations
+    zoom.ts         decides which part of each screenshot to show (auto zoom rules)
+    render.ts       draws a screenshot with zoom, blur, highlight, annotations and the page thumbnail
     templates.ts    offline SOP and training documents
     ai.ts           Claude calls: step rewriting (structured JSON) and document writing (streamed)
     export.ts       HTML / Markdown / PDF / JSON
@@ -81,7 +84,7 @@ Screenshots use `chrome.tabs.captureVisibleTab`. All positions (highlights, anno
 
 ```bash
 npm run dev         # editor in a normal browser tab (capturing needs the extension)
-npm test            # unit tests: step wording, secret detection, merging, templates
+npm test            # unit tests: step wording, secret detection, merging, zoom rules, templates
 npm run lint
 npm run typecheck
 npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e

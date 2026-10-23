@@ -185,6 +185,8 @@ export async function createSampleGuide(): Promise<Guide> {
       pageTitle: 'Contacts · Acme CRM',
       imageId,
       targetRect: s.rect,
+      // Field labels sit just above each field.
+      labelRect: s.action === 'type' || s.action === 'select' ? { x: s.rect!.x, y: s.rect!.y - 30 / H, w: 160 / W, h: 22 / H } : undefined,
       click: s.rect ? { x: s.rect.x + s.rect.w / 2, y: s.rect.y + s.rect.h / 2 } : undefined,
       showAutoHighlight: !!s.rect,
       annotations: [],

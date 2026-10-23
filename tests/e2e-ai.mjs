@@ -90,6 +90,7 @@ try {
   await page.getByRole('button', { name: 'Open a sample guide' }).click()
   await page.waitForSelector('textarea[aria-label^="Step"]')
   await page.waitForTimeout(1200)
+  await page.locator('[id^=step-]').nth(5).scrollIntoViewIfNeeded()
   await page.screenshot({ path: join(out, 'ai-0-sample.png') })
 
   await page.getByRole('button', { name: /Improve steps with Claude/ }).click()
@@ -104,6 +105,10 @@ try {
   check(polish.body.thinking?.type === 'adaptive', 'adaptive thinking')
   const images = polish.body.messages[0].content.filter((b) => b.type === 'image')
   check(images.length === 6 && images[0].source.media_type === 'image/jpeg', 'sends the 6 screenshots')
+  const shape = await page.evaluate(async (d) => {
+    const i = new Image(); i.src = 'data:image/jpeg;base64,' + d; await i.decode(); return +(i.naturalWidth / i.naturalHeight).toFixed(2)
+  }, images[2].source.data)
+  check(shape === 1.68, 'Claude gets full-screen screenshots, not zoomed ones')
   check(polish.body.system.includes('new sales reps'), 'audience setting is used')
   check(polish.headers['x-api-key'] === 'sk-ant-test' || polish.headers.authorization === 'Bearer sk-ant-test', 'sends the saved key')
 

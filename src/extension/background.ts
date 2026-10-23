@@ -102,6 +102,7 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
     imageId,
     click: event.click,
     targetRect: event.targetRect,
+    labelRect: event.labelRect,
     showAutoHighlight: event.action !== 'key' && event.action !== 'navigate',
     annotations: blurs,
     elementKey: event.elementKey,

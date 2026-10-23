@@ -3,11 +3,12 @@ import { loadSettings, polishSteps } from '../../shared/ai'
 import { deleteImage, putImage } from '../../shared/db'
 import { download, guideBodyHtml, guideJson, guideMarkdown, printHtml, renderAll, slug, wrapHtml, type Rendered } from '../../shared/export'
 import { stepNumbers } from '../../shared/templates'
+import { guideViews, type StepView } from '../../shared/zoom'
 import type { DocKind, Step, StepKind } from '../../shared/types'
 import { uid } from '../../shared/types'
 import { Dropdown, Icon, Toast, type ToastData, AutoText } from '../ui'
 import { useGuide } from '../useGuide'
-import { Annotator } from './Annotator'
+import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
 import { SettingsDialog } from './Settings'
 import { StepCard } from './StepCard'
@@ -54,6 +55,8 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
 
   const readOnly = guide?.status === 'recording'
   const nums = useMemo(() => (guide ? stepNumbers(guide) : new Map<string, number>()), [guide])
+  const views = useMemo(() => (guide ? guideViews(guide, images) : new Map<string, StepView>()), [guide, images])
+  const [annotTool, setAnnotTool] = useState<Tool>('box')
 
   // Flattened screenshots are needed by the preview, documents and exports.
   useEffect(() => {
@@ -150,7 +153,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
     }
     setPolishing(true)
     try {
-      const r = await renderAll(guide, images, 1200)
+      const r = await renderAll(guide, images, 1200, { full: true })
       const result = await polishSteps(guide, r, settings)
       const before = guide
       const byNumber = new Map(result.steps.map((s) => [s.number, s]))
@@ -304,6 +307,48 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                   {nums.size} step{nums.size === 1 ? '' : 's'} · click a screenshot to annotate it
                 </p>
               </div>
+              {!readOnly && nums.size > 0 && (
+                <Dropdown label="Screenshots" icon="image">
+                  {(close) => (
+                    <div className="w-72 p-2 text-sm">
+                      <p className="mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-muted">Zoom</p>
+                      {(
+                        [
+                          ['auto', 'Auto', 'Full screen for the first step on each page, then zoom in on what was clicked'],
+                          ['always', 'Always zoom', 'Zoom in on every click, even the first on a page'],
+                          ['full', 'Always full screen', 'Never zoom'],
+                        ] as const
+                      ).map(([m, l, d]) => (
+                        <label key={m} className="flex cursor-pointer gap-2 rounded-md px-1 py-1.5 hover:bg-raised">
+                          <input type="radio" name="zoomMode" className="mt-1" checked={(guide.zoomMode ?? 'auto') === m} onChange={() => update((g) => ({ ...g, zoomMode: m }))} />
+                          <span>
+                            <span className="block font-medium">{l}</span>
+                            <span className="block text-xs text-muted">{d}</span>
+                          </span>
+                        </label>
+                      ))}
+                      <label className="mt-1 flex cursor-pointer gap-2 border-t border-line px-1 pb-1 pt-2.5">
+                        <input type="checkbox" className="mt-1" checked={guide.zoomInset !== false} onChange={(e) => update((g) => ({ ...g, zoomInset: e.target.checked }))} />
+                        <span>
+                          <span className="block font-medium">Page thumbnail on zoomed images</span>
+                          <span className="block text-xs text-muted">A small view of the whole page in the corner</span>
+                        </span>
+                      </label>
+                      <button
+                        className="menu-item mt-1 border-t border-line text-muted"
+                        onClick={() => {
+                          close()
+                          const before = guide
+                          update((g) => ({ ...g, steps: g.steps.map((s) => ({ ...s, crop: undefined, zoom: undefined })) }))
+                          setToast({ text: 'All screenshots now follow the zoom setting', action: { label: 'Undo', run: () => update(() => before) } })
+                        }}
+                      >
+                        Reset every step to this setting
+                      </button>
+                    </div>
+                  )}
+                </Dropdown>
+              )}
               {!readOnly && (
                 <button className="btn-secondary" onClick={polish} disabled={polishing || !nums.size}>
                   <Icon name="sparkle" /> {polishing ? 'Improving…' : 'Improve steps with Claude'}
@@ -330,7 +375,15 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                   onChange={(p) => patchStep(s.id, p)}
                   onMove={(d) => moveStep(i, d)}
                   onDelete={() => deleteStep(i)}
-                  onAnnotate={() => setAnnotating(s.id)}
+                  view={views.get(s.id)}
+                  onAnnotate={() => {
+                    setAnnotTool('box')
+                    setAnnotating(s.id)
+                  }}
+                  onAdjustZoom={() => {
+                    setAnnotTool('crop')
+                    setAnnotating(s.id)
+                  }}
                 />
                 {s.kind === 'step' && !s.imageId && !readOnly && (
                   <button
@@ -369,6 +422,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
           rendered={rendered}
           onSave={(markdown, source) => update((g) => ({ ...g, docs: { ...g.docs, [tab]: { kind: tab, markdown, source, updatedAt: Date.now() } } }))}
           needKey={() => setSettingsOpen(true)}
+          renderForAi={() => renderAll(guide, images, 1400, { full: true })}
           toast={setToast}
         />
       )}
@@ -377,6 +431,8 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
         <Annotator
           step={annotStep}
           image={annotImage}
+          initialTool={annotTool}
+          autoZoom={views.get(annotStep.id)?.crop}
           onCancel={() => setAnnotating(null)}
           onSave={(r) => {
             patchStep(annotStep.id, r)

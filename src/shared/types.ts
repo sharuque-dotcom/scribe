@@ -56,7 +56,12 @@ export interface Step {
   targetRect?: NRect
   showAutoHighlight?: boolean
   annotations: Annotation[]
+  // A zoom area the user picked. Overrides automatic zoom.
   crop?: NRect
+  // 'full' keeps this step's screenshot full screen. Unset follows the guide setting.
+  zoom?: 'full'
+  // Where the clicked field's label is, so zoomed images include it.
+  labelRect?: NRect
   // Key that identifies the page element, used to merge "click field" + "type into field".
   elementKey?: string
   createdAt: number
@@ -80,6 +85,10 @@ export interface Guide {
   status: 'recording' | 'ready'
   steps: Step[]
   docs: Partial<Record<DocKind, GuideDoc>>
+  // How screenshots are framed. Unset means 'auto'.
+  zoomMode?: 'auto' | 'full' | 'always'
+  // Show a small full-page thumbnail on zoomed screenshots. Unset means on.
+  zoomInset?: boolean
 }
 
 export interface StoredImage {
@@ -98,6 +107,7 @@ export interface CapturedEvent {
   key?: string
   click?: NPoint
   targetRect?: NRect
+  labelRect?: NRect
   redactRects: NRect[]
   elementKey?: string
   url: string

@@ -41,22 +41,30 @@ export function autoHighlight(step: Step): { kind: 'rect'; rect: NRect } | { kin
   return null
 }
 
+// How to frame the screenshot: which area to show and whether to add the
+// corner thumbnail. Without a view, the step's own crop (if any) is used.
+export interface RenderView {
+  crop?: NRect
+  inset?: boolean
+}
+
 interface RenderOpts {
   maxWidth?: number
   type?: 'image/jpeg' | 'image/png'
   quality?: number
+  view?: RenderView
 }
 
 export async function renderStep(step: Step, image: StoredImage, opts: RenderOpts = {}): Promise<string> {
   const img = await loadImage(image.dataUrl)
-  const canvas = drawStep(step, img, opts.maxWidth ?? 1600)
+  const canvas = drawStep(step, img, opts.maxWidth ?? 1600, opts.view)
   return canvas.toDataURL(opts.type ?? 'image/jpeg', opts.quality ?? 0.9)
 }
 
-export function drawStep(step: Step, img: HTMLImageElement, maxWidth: number): HTMLCanvasElement {
+export function drawStep(step: Step, img: HTMLImageElement, maxWidth: number, view?: RenderView): HTMLCanvasElement {
   const iw = img.naturalWidth
   const ih = img.naturalHeight
-  const crop = step.crop ?? FULL
+  const crop = view ? (view.crop ?? FULL) : (step.crop ?? FULL)
   const sw = crop.w * iw
   const sh = crop.h * ih
   const scale = Math.min(1, maxWidth / sw)
@@ -116,7 +124,56 @@ export function drawStep(step: Step, img: HTMLImageElement, maxWidth: number): H
     if (a.type === 'blur' || a.type === 'spotlight') continue
     drawAnnotation(ctx, a, X, Y, unit)
   }
+
+  const zoomed = crop.w < 0.999 || crop.h < 0.999
+  if (view?.inset && zoomed) drawInset(ctx, step, img, crop, cw, ch)
   return canvas
+}
+
+// A small picture of the whole page in a corner, with a box showing where the
+// zoomed area is. Drawn from the full render, so blurred areas stay blurred.
+function drawInset(ctx: CanvasRenderingContext2D, step: Step, img: HTMLImageElement, crop: NRect, cw: number, ch: number) {
+  const tw = Math.round(Math.max(130, Math.min(cw * 0.24, 320)))
+  if (tw > cw * 0.45) return
+  const full = drawStep({ ...step, showAutoHighlight: false }, img, tw * 2, { crop: FULL, inset: false })
+  const th = Math.round((tw * full.height) / full.width)
+  const m = Math.round(Math.max(8, cw * 0.015))
+  const border = Math.max(2, Math.round(tw / 90))
+
+  // Use the corner furthest from what the step is about.
+  const hl = autoHighlight(step)
+  const fx = hl ? (hl.kind === 'rect' ? hl.rect.x + hl.rect.w / 2 : hl.x) : crop.x + crop.w / 2
+  const fy = hl ? (hl.kind === 'rect' ? hl.rect.y + hl.rect.h / 2 : hl.y) : crop.y + crop.h / 2
+  const left = (fx - crop.x) / crop.w > 0.5
+  const top = (fy - crop.y) / crop.h > 0.5
+  const x = left ? m : cw - tw - m
+  const y = top ? m : ch - th - m
+
+  ctx.save()
+  ctx.shadowColor = 'rgba(15,23,42,0.35)'
+  ctx.shadowBlur = m
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  roundRectPath(ctx, x - border, y - border, tw + border * 2, th + border * 2, border * 3)
+  ctx.fill()
+  ctx.restore()
+  ctx.save()
+  ctx.beginPath()
+  roundRectPath(ctx, x, y, tw, th, border * 2)
+  ctx.clip()
+  ctx.drawImage(full, x, y, tw, th)
+  // Dim outside the zoomed area so the box stands out.
+  ctx.fillStyle = 'rgba(15,23,42,0.35)'
+  ctx.beginPath()
+  ctx.rect(x, y, tw, th)
+  ctx.rect(x + crop.x * tw, y + crop.y * th, crop.w * tw, crop.h * th)
+  ctx.fill('evenodd')
+  ctx.restore()
+  ctx.save()
+  ctx.strokeStyle = HIGHLIGHT
+  ctx.lineWidth = Math.max(2, tw / 80)
+  ctx.strokeRect(x + crop.x * tw, y + crop.y * th, crop.w * tw, crop.h * th)
+  ctx.restore()
 }
 
 function pixelate(

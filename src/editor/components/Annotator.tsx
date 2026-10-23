@@ -4,7 +4,7 @@ import type { Annotation, AnnotationType, NRect, Step, StoredImage } from '../..
 import { uid } from '../../shared/types'
 import { Icon } from '../ui'
 
-type Tool = 'select' | AnnotationType | 'crop'
+export type Tool = 'select' | AnnotationType | 'crop'
 
 const TOOLS: { id: Tool; label: string; icon: string; hint: string }[] = [
   { id: 'select', label: 'Select', icon: 'pointer', hint: 'Click to select, drag to move. Delete removes.' },
@@ -14,12 +14,13 @@ const TOOLS: { id: Tool; label: string; icon: string; hint: string }[] = [
   { id: 'marker', label: 'Number', icon: 'marker', hint: 'Click to drop a numbered marker.' },
   { id: 'blur', label: 'Blur', icon: 'blur', hint: 'Drag over anything sensitive to redact it.' },
   { id: 'spotlight', label: 'Spotlight', icon: 'spotlight', hint: 'Drag to dim everything except this area.' },
-  { id: 'crop', label: 'Crop', icon: 'crop', hint: 'Drag to choose the part of the screenshot to keep.' },
+  { id: 'crop', label: 'Zoom area', icon: 'crop', hint: 'Drag to choose the area to zoom in on. The dashed frame is the current zoom.' },
 ]
 
 interface Result {
   annotations: Annotation[]
   crop?: NRect
+  zoom?: 'full'
   showAutoHighlight: boolean
 }
 
@@ -38,11 +39,11 @@ function textWidth(text: string, size: number): number {
   return measureCtx!.measureText(text).width
 }
 
-export function Annotator({ step, image, onCancel, onSave }: { step: Step; image: StoredImage; onCancel: () => void; onSave: (r: Result) => void }) {
+export function Annotator({ step, image, autoZoom, initialTool = 'box', onCancel, onSave }: { step: Step; image: StoredImage; autoZoom?: NRect; initialTool?: Tool; onCancel: () => void; onSave: (r: Result) => void }) {
   const [annotations, setAnnotations] = useState<Annotation[]>(step.annotations)
   const [crop, setCrop] = useState<NRect | undefined>(step.crop)
   const [showAuto, setShowAuto] = useState(step.showAutoHighlight !== false)
-  const [tool, setTool] = useState<Tool>('box')
+  const [tool, setTool] = useState<Tool>(initialTool)
   const [color, setColor] = useState(COLORS[0])
   const [selected, setSelected] = useState<string | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -257,7 +258,7 @@ export function Annotator({ step, image, onCancel, onSave }: { step: Step; image
   }
 
   const spot = annotations.find((a) => a.type === 'spotlight')
-  const shownCrop = draft?.type === 'crop' ? normRect(draft) : crop
+  const shownCrop = draft?.type === 'crop' ? normRect(draft) : (crop ?? (tool === 'crop' ? autoZoom : undefined))
   const dimOutside = (r: NRect, fill: string) => (
     <path
       d={`M0 0H${iw}V${ih}H0Z M${P(r.x)} ${Q(r.y)}h${P(r.w)}v${Q(r.h)}h${-P(r.w)}Z`}
@@ -324,13 +325,13 @@ export function Annotator({ step, image, onCancel, onSave }: { step: Step; image
                 setCrop(undefined)
               }}
             >
-              Reset crop
+              Back to auto zoom
             </button>
           )}
           <button className="rounded-md px-3 py-1.5 text-sm text-white/80 hover:bg-white/10" onClick={onCancel}>
             Cancel
           </button>
-          <button className="rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-slate-900 hover:bg-white/90" onClick={() => onSave({ annotations, crop, showAutoHighlight: showAuto })}>
+          <button className="rounded-md bg-white px-4 py-1.5 text-sm font-semibold text-slate-900 hover:bg-white/90" onClick={() => onSave({ annotations, crop, showAutoHighlight: showAuto, zoom: crop ? undefined : step.zoom })}>
             Save
           </button>
         </div>

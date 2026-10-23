@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import { renderStep } from '../../shared/render'
+import { renderStep, type RenderView } from '../../shared/render'
 import type { Step, StoredImage } from '../../shared/types'
 
 // Shows a step's screenshot with its highlight, annotations and redactions applied.
-export function StepImage({ step, image, maxWidth = 1400, className = '', onClick }: { step: Step; image?: StoredImage; maxWidth?: number; className?: string; onClick?: () => void }) {
+export function StepImage({ step, image, view, maxWidth = 1400, className = '', onClick }: { step: Step; image?: StoredImage; view?: RenderView; maxWidth?: number; className?: string; onClick?: () => void }) {
   const [src, setSrc] = useState<string>()
-  const key = JSON.stringify([step.annotations, step.crop, step.targetRect, step.click, step.showAutoHighlight, image?.id])
+  const key = JSON.stringify([step.annotations, step.crop, step.targetRect, step.click, step.showAutoHighlight, image?.id, view])
 
   useEffect(() => {
     if (!image) return
     let live = true
-    renderStep(step, image, { maxWidth }).then((s) => live && setSrc(s))
+    renderStep(step, image, { maxWidth, view }).then((s) => live && setSrc(s))
     return () => {
       live = false
     }

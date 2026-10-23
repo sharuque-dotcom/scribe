@@ -22,6 +22,8 @@ interface Props {
   rendered: Rendered | null
   onSave: (markdown: string, source: 'ai' | 'template') => void
   needKey: () => void
+  // Full-screen screenshots for Claude, so it sees the whole page.
+  renderForAi: () => Promise<Rendered>
   toast: (t: ToastData) => void
 }
 
@@ -46,7 +48,7 @@ function DocFrame({ html }: { html: string }) {
   return <iframe ref={ref} title="Document preview" srcDoc={html} className="w-full rounded-xl border border-line bg-white shadow-soft" style={{ height }} />
 }
 
-export function DocView({ kind, guide, rendered, onSave, needKey, toast }: Props) {
+export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, toast }: Props) {
   const doc = guide.docs[kind]
   const [editing, setEditing] = useState(false)
   const [streaming, setStreaming] = useState<string | null>(null)
@@ -83,7 +85,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, toast }: Props
     setStreaming('')
     setEditing(false)
     try {
-      const text = await writeDocument(kind, guide, rendered, settings, setStreaming, ctrl.signal)
+      const text = await writeDocument(kind, guide, await renderForAi(), settings, setStreaming, ctrl.signal)
       if (text.trim()) onSave(text, 'ai')
       if (ctrl.signal.aborted) toast({ text: 'Stopped. Kept what was written so far.' })
     } catch (err) {

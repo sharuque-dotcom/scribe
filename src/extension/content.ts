@@ -155,15 +155,13 @@ function init() {
     extra: Partial<CapturedEvent>,
   ): CapturedEvent {
     const target = describeTarget(el)
-    const r = el.getBoundingClientRect()
-    const targetRect: NRect | undefined =
-      r.width > 0 && r.height > 0 && action !== 'key'
-        ? { x: r.left / innerWidth, y: r.top / innerHeight, w: r.width / innerWidth, h: r.height / innerHeight }
-        : undefined
+    const targetRect = action === 'key' ? undefined : viewportRect(el)
+    const labelRect = targetRect ? nearbyLabelRect(el, targetRect) : undefined
     return {
       action,
       target,
       targetRect,
+      labelRect,
       redactRects: sensitiveRects(),
       elementKey: elementKey(el),
       url: location.href,
@@ -192,6 +190,30 @@ function interactiveAncestor(el: Element): Element {
     if (t && t.length <= 60) return cur
   }
   return el
+}
+
+function viewportRect(el: Element): NRect | undefined {
+  const r = el.getBoundingClientRect()
+  if (r.width <= 0 || r.height <= 0) return undefined
+  return { x: r.left / innerWidth, y: r.top / innerHeight, w: r.width / innerWidth, h: r.height / innerHeight }
+}
+
+// The visible label for a form field, if it sits close to the field.
+// Used so zoomed screenshots show the field name as well as its value.
+function nearbyLabelRect(el: Element, field: NRect): NRect | undefined {
+  let label: Element | null = null
+  if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    label = el.labels?.[0] ?? null
+  }
+  const ref = el.getAttribute('aria-labelledby')?.split(/\s+/)[0]
+  if (!label && ref) label = document.getElementById(ref)
+  if (!label) return undefined
+  const r = viewportRect(label)
+  if (!r) return undefined
+  // Ignore labels far away from the field (e.g. a heading used as a label).
+  const dx = Math.abs(r.x + r.w / 2 - (field.x + field.w / 2))
+  const dy = Math.abs(r.y + r.h / 2 - (field.y + field.h / 2))
+  return dx < 0.25 && dy < 0.15 ? r : undefined
 }
 
 function isTextField(el: EventTarget | null): el is HTMLInputElement | HTMLTextAreaElement {

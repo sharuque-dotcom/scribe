@@ -2,6 +2,7 @@
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import { getImages, putGuide, putImage } from './db'
+import { guideViews } from './zoom'
 import { renderStep } from './render'
 import { stepNumbers } from './templates'
 import type { Guide, StoredImage } from './types'
@@ -12,20 +13,26 @@ export type Rendered = Record<string, string> // stepId -> flattened image data 
 export const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 
-export async function renderAll(guide: Guide, images: Record<string, StoredImage>, maxWidth = 1400): Promise<Rendered> {
+// Renders every step's screenshot as readers see it (zoomed where the guide's
+// zoom rules say so). `full: true` gives whole-screen images instead, which is
+// what Claude gets so it can see the full page.
+export async function renderAll(
+  guide: Guide,
+  images: Record<string, StoredImage>,
+  maxWidth = 1400,
+  opts: { full?: boolean } = {},
+): Promise<Rendered> {
+  const views = guideViews(guide, images)
   const out: Rendered = {}
   await Promise.all(
     guide.steps.map(async (s) => {
       const img = s.imageId ? images[s.imageId] : undefined
-      if (img) out[s.id] = await renderStep(s, img, { maxWidth })
+      if (!img) return
+      const view = opts.full ? { inset: false } : views.get(s.id)
+      out[s.id] = await renderStep(s, img, { maxWidth, view })
     }),
   )
   return out
-}
-
-export async function loadAndRender(guide: Guide, maxWidth = 1400): Promise<Rendered> {
-  const ids = guide.steps.map((s) => s.imageId).filter((x): x is string => !!x)
-  return renderAll(guide, await getImages(ids), maxWidth)
 }
 
 // Map "Step N" numbers to rendered screenshots, for document placeholders.

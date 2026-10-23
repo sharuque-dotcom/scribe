@@ -73,6 +73,14 @@ try {
   check(titles.includes('Select "Marketing launch" from the "Template" dropdown'), 'dropdown choice')
   check(titles.at(-1) === 'Click the "Create project" button', 'last click')
   check((await editor.locator('main img[alt^="Screenshot"]').count()) === titles.length, 'every step has a screenshot')
+  // Zoom: first step on each page is full screen, later ones zoom in (16:10 frame + label).
+  const shapes = await editor.$$eval('main img[alt^="Screenshot"]', (els) => els.map((i) => +(i.naturalWidth / i.naturalHeight).toFixed(2)))
+  const zoomLabels = await editor.$$eval('[aria-label="Screenshot zoom"]', (els) => els.map((e) => e.parentElement.lastElementChild.textContent))
+  console.log('zoom per step:\n  ' + zoomLabels.join('\n  '))
+  check(zoomLabels[0] === 'Full screen' && shapes[0] === 1.6, 'first step stays full screen')
+  check(zoomLabels[1].startsWith('Auto zoom') && shapes[1] === 1.6, 'typing step on the same page is zoomed')
+  check(zoomLabels[5] === 'Full screen: first step on this page', 'first click on the new page is full screen')
+  check(zoomLabels.filter((l) => l.startsWith('Auto zoom')).length >= 5, 'most steps are zoomed')
   await editor.screenshot({ path: join(out, '1-editor.png'), fullPage: false })
   await editor.locator('#step-' + (await editor.$$eval('[id^=step-]', (e) => e[3].id.slice(5)))).scrollIntoViewIfNeeded()
   await editor.screenshot({ path: join(out, '2-editor-steps.png') })
@@ -94,6 +102,18 @@ try {
   await editor.screenshot({ path: join(out, '3-annotator.png') })
   await editor.getByRole('button', { name: 'Save', exact: true }).click()
   await pause(800)
+
+  // Switching one step to full screen, then back to auto.
+  const zoomGroup = editor.locator('[aria-label="Screenshot zoom"]').nth(1)
+  await zoomGroup.scrollIntoViewIfNeeded()
+  await zoomGroup.getByRole('button', { name: 'Full screen' }).click()
+  await editor.waitForTimeout(400)
+  check((await zoomGroup.locator('xpath=..').locator('span').last().textContent()) === 'Full screen', 'a step can be switched to full screen')
+  await zoomGroup.getByRole('button', { name: 'Zoom' }).click()
+  await editor.waitForTimeout(400)
+  check((await editor.getByLabel('Zoom level').count()) === 1, 'custom zoom shows a zoom slider')
+  await zoomGroup.getByRole('button', { name: 'Auto' }).click()
+  await editor.waitForTimeout(400)
 
   // SOP from template, then export.
   await editor.goto(`chrome-extension://${extId}/editor.html${new URL(editor.url()).hash}/sop`)

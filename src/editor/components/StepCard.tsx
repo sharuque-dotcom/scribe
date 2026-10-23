@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { NoteStyle, Step, StoredImage } from '../../shared/types'
+import { focusRect, MAX_FACTOR, REASON_TEXT, zoomAround, type StepView } from '../../shared/zoom'
 import { AutoText, Icon } from '../ui'
 import { StepImage } from './StepImage'
 
@@ -7,6 +8,7 @@ interface Props {
   step: Step
   number?: number
   image?: StoredImage
+  view?: StepView
   first: boolean
   last: boolean
   readOnly: boolean
@@ -14,6 +16,7 @@ interface Props {
   onMove: (dir: -1 | 1) => void
   onDelete: () => void
   onAnnotate: () => void
+  onAdjustZoom: () => void
 }
 
 const NOTE_STYLES: Record<NoteStyle, { label: string; cls: string }> = {
@@ -22,7 +25,7 @@ const NOTE_STYLES: Record<NoteStyle, { label: string; cls: string }> = {
   warning: { label: 'Warning', cls: 'border-amber-500 bg-amber-50' },
 }
 
-export function StepCard({ step, number, image, first, last, readOnly, onChange, onMove, onDelete, onAnnotate }: Props) {
+export function StepCard({ step, number, image, view, first, last, readOnly, onChange, onMove, onDelete, onAnnotate, onAdjustZoom }: Props) {
   const [showDetail, setShowDetail] = useState(!!step.detail)
 
   const tools = !readOnly && (
@@ -96,13 +99,78 @@ export function StepCard({ step, number, image, first, last, readOnly, onChange,
         </div>
         {tools}
       </div>
-      {image && <StepImage step={step} image={image} className="mt-4" maxWidth={1200} onClick={readOnly ? undefined : onAnnotate} />}
+      {image && <StepImage step={step} image={image} view={view} className="mt-4" maxWidth={1200} onClick={readOnly ? undefined : onAnnotate} />}
+      {image && view && !readOnly && <ZoomControls step={step} image={image} view={view} onChange={onChange} onAdjust={onAdjustZoom} />}
       {step.url && (
         <p className="mt-2 truncate text-xs text-muted" title={step.url}>
           {step.pageTitle ? `${step.pageTitle} · ` : ''}
           {step.url}
         </p>
       )}
+    </div>
+  )
+}
+
+type ZoomChoice = 'auto' | 'full' | 'custom'
+
+// Full screen / auto zoom / custom zoom for one screenshot.
+function ZoomControls({ step, image, view, onChange, onAdjust }: { step: Step; image: StoredImage; view: StepView; onChange: (p: Partial<Step>) => void; onAdjust: () => void }) {
+  const choice: ZoomChoice = step.crop ? 'custom' : step.zoom === 'full' ? 'full' : 'auto'
+
+  const pick = (c: ZoomChoice) => {
+    if (c === 'auto') onChange({ crop: undefined, zoom: undefined })
+    else if (c === 'full') onChange({ crop: undefined, zoom: 'full' })
+    else {
+      // Start from what's shown now, or a 2x zoom on the clicked element.
+      const focus = focusRect(step) ?? { x: 0.4, y: 0.4, w: 0.2, h: 0.2 }
+      onChange({ crop: view.crop ?? zoomAround(focus, image, 2), zoom: undefined })
+    }
+  }
+
+  const setFactor = (f: number) => {
+    const c = step.crop
+    if (!c) return
+    // Keep the same centre while changing how far in it goes.
+    const centre = { x: c.x + c.w / 2, y: c.y + c.h / 2, w: 0, h: 0 }
+    onChange({ crop: zoomAround(centre, image, f) })
+  }
+
+  const factor = view.factor
+  const label = choice === 'auto' ? (view.reason === 'zoomed' ? `Auto zoom · ${factor.toFixed(1)}×` : REASON_TEXT[view.reason]) : choice === 'full' ? 'Full screen' : `Custom zoom · ${factor.toFixed(1)}×`
+
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
+      <div className="inline-flex rounded-md border border-line bg-raised p-0.5" role="group" aria-label="Screenshot zoom">
+        {(
+          [
+            ['auto', 'Auto'],
+            ['full', 'Full screen'],
+            ['custom', 'Zoom'],
+          ] as const
+        ).map(([c, l]) => (
+          <button key={c} onClick={() => pick(c)} aria-pressed={choice === c} className={`rounded px-2.5 py-1 font-medium ${choice === c ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+      {choice === 'custom' && (
+        <>
+          <input
+            type="range"
+            min={1.25}
+            max={MAX_FACTOR}
+            step={0.05}
+            value={Math.min(factor, MAX_FACTOR)}
+            onChange={(e) => setFactor(Number(e.target.value))}
+            aria-label="Zoom level"
+            className="w-28 accent-indigo-600"
+          />
+          <button className="font-medium text-accent hover:underline" onClick={onAdjust}>
+            Move zoom area
+          </button>
+        </>
+      )}
+      <span className="text-muted">{label}</span>
     </div>
   )
 }
