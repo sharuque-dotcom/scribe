@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --canvas: 246 247 249;
+  --surface: 255 255 255;
+  --raised: 241 243 246;
+  --ink: 17 24 39;
+  --muted: 100 116 139;
+  --line: 226 232 240;
+  --accent: 79 70 229;
+  --rec: 239 68 68;
+  color-scheme: light;
+}
+
+html, body { background: rgb(var(--canvas)); color: rgb(var(--ink)); }
+body { font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
+body.popup { width: 340px; background: rgb(var(--surface)); }
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap; }
+  .btn-primary { @apply btn bg-accent text-white hover:bg-accent/90; }
+  .btn-secondary { @apply btn bg-surface text-ink border border-line hover:bg-raised; }
+  .btn-ghost { @apply btn text-muted hover:bg-raised hover:text-ink; }
+  .btn-danger { @apply btn bg-rec text-white hover:bg-rec/90; }
+  .icon-btn { @apply inline-flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-raised hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent; }
+  .input { @apply w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20; }
+  .card { @apply rounded-xl border border-line bg-surface shadow-soft; }
+  .menu { @apply absolute z-30 mt-1 min-w-[200px] rounded-lg border border-line bg-surface p-1 shadow-soft; }
+  .menu-item { @apply flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-raised; }
+}
