@@ -44,6 +44,28 @@ function init() {
 
   const active = () => state.recording && !state.paused
 
+  // While video is recording, send the mouse path (about 30 positions a second)
+  // and where secret fields are, so the video can show a smooth cursor and blur them.
+  let samples: { t: number; x: number; y: number }[] = []
+  let lastSample = 0
+  document.addEventListener(
+    'pointermove',
+    (e) => {
+      if (!active() || !state.video) return
+      const now = Date.now()
+      if (now - lastSample < 30) return
+      lastSample = now
+      samples.push({ t: now, x: e.clientX / innerWidth, y: e.clientY / innerHeight })
+    },
+    { capture: true, passive: true },
+  )
+  window.setInterval(() => {
+    if (!active() || !state.video) return
+    const batch = samples
+    samples = []
+    chrome.runtime.sendMessage({ type: 'cursor', samples: batch, rects: sensitiveRects(), at: Date.now() }).catch(() => {})
+  }, 500)
+
   async function send(event: CapturedEvent) {
     bar.hide()
     try {
@@ -135,8 +157,11 @@ function init() {
     if ((recordedValues.get(el) ?? el.defaultValue) === el.value) return false
     recordedValues.set(el, el.value)
     let click: CapturedEvent['click']
+    let t: number | undefined
     if (pendingField?.el === el) {
       click = pendingField.event.click
+      // In the video, the caption appears when they clicked into the field.
+      t = pendingField.event.t
       pendingField = null
     }
     const sensitive = looksSensitive({
@@ -145,7 +170,7 @@ function init() {
       id: el.id,
       autocomplete: el.getAttribute('autocomplete') ?? undefined,
     })
-    void send(buildEvent('type', el, { value: sensitive ? '' : el.value, sensitive, click }))
+    void send(buildEvent('type', el, { value: sensitive ? '' : el.value, sensitive, click, ...(t ? { t } : {}) }))
     return true
   }
 
@@ -166,6 +191,7 @@ function init() {
       elementKey: elementKey(el),
       url: location.href,
       pageTitle: document.title,
+      t: Date.now(),
       ...extra,
     }
   }
@@ -341,8 +367,9 @@ function createBar() {
   }
   return {
     update(s: RecorderState) {
-      visible = s.recording
-      if (!s.recording) {
+      // No bar while recording video: it would appear in the video.
+      visible = s.recording && !s.video
+      if (!visible) {
         host.remove()
         return
       }

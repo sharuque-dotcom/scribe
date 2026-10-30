@@ -10,13 +10,16 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "e2e": "node tests/e2e.mjs && node tests/e2e-ai.mjs",
+    "e2e": "node tests/e2e.mjs && node tests/e2e-ai.mjs && node tests/e2e-video.mjs",
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
+    "@mediabunny/aac-encoder": "^1.64.0",
     "dompurify": "^3.4.17",
+    "kokoro-js": "^1.2.1",
     "marked": "^18.1.1",
+    "mediabunny": "^1.64.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

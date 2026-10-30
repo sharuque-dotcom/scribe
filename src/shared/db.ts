@@ -1,9 +1,9 @@
 // IndexedDB storage. Guides hold step metadata; screenshots live in a
 // separate store so editing a step's text doesn't rewrite every image.
-import type { Guide, StoredImage } from './types'
+import type { Guide, StoredImage, StoredVideo } from './types'
 
 const DB_NAME = 'scribe'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -15,8 +15,18 @@ function openDb(): Promise<IDBDatabase> {
         const db = req.result
         if (!db.objectStoreNames.contains('guides')) db.createObjectStore('guides', { keyPath: 'id' })
         if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' })
+        if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos', { keyPath: 'id' })
+        if (!db.objectStoreNames.contains('voice')) db.createObjectStore('voice', { keyPath: 'key' })
       }
-      req.onsuccess = () => resolve(req.result)
+      req.onsuccess = () => {
+        const db = req.result
+        // Let a newer version of the app upgrade the database (e.g. after an update).
+        db.onversionchange = () => {
+          db.close()
+          dbPromise = null
+        }
+        resolve(db)
+      }
       req.onerror = () => {
         dbPromise = null
         reject(req.error)
@@ -26,7 +36,9 @@ function openDb(): Promise<IDBDatabase> {
   return dbPromise
 }
 
-function run<T>(store: 'guides' | 'images', mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
+type StoreName = 'guides' | 'images' | 'videos' | 'voice'
+
+function run<T>(store: StoreName, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return openDb().then(
     (db) =>
       new Promise<T>((resolve, reject) => {
@@ -52,6 +64,7 @@ export async function deleteGuide(id: string): Promise<void> {
   const g = await getGuide(id)
   if (g) {
     for (const step of g.steps) if (step.imageId) await deleteImage(step.imageId)
+    if (g.video) await deleteVideo(g.video.blobId)
   }
   await run('guides', 'readwrite', (s) => s.delete(id))
 }
@@ -59,6 +72,19 @@ export async function deleteGuide(id: string): Promise<void> {
 export const getImage = (id: string) => run<StoredImage | undefined>('images', 'readonly', (s) => s.get(id))
 export const putImage = (img: StoredImage) => run('images', 'readwrite', (s) => s.put(img))
 export const deleteImage = (id: string) => run('images', 'readwrite', (s) => s.delete(id))
+
+export const getVideo = (id: string) => run<StoredVideo | undefined>('videos', 'readonly', (s) => s.get(id))
+export const putVideo = (v: StoredVideo) => run('videos', 'readwrite', (s) => s.put(v))
+export const deleteVideo = (id: string) => run('videos', 'readwrite', (s) => s.delete(id))
+
+// Generated voice clips, keyed by voice + text, so each sentence is only made once.
+export interface VoiceClip {
+  key: string
+  sampleRate: number
+  samples: Float32Array
+}
+export const getVoiceClip = (key: string) => run<VoiceClip | undefined>('voice', 'readonly', (s) => s.get(key))
+export const putVoiceClip = (c: VoiceClip) => run('voice', 'readwrite', (s) => s.put(c))
 
 export async function getImages(ids: string[]): Promise<Record<string, StoredImage>> {
   const out: Record<string, StoredImage> = {}

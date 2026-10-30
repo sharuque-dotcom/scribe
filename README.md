@@ -17,6 +17,18 @@ It's a Chrome/Edge extension with a built-in editor. Everything is stored in you
 
 Clicking a field and then typing becomes one step, not two. A small bar on the page lets you pause or finish, and it never shows up in the screenshots.
 
+**Video.** Turn on *Also record video* in the popup and the same click-through also records the tab, with no camera and no microphone. The **Video** tab then gives you:
+
+- auto-zoom in on each click, panning across a page and zooming back out when the page changes
+- a smooth, larger cursor and a click ripple (tab recordings have no cursor, so it's drawn from the recorded mouse path)
+- captions at the bottom from the step text ("Click the Save button"), with an optional narration line per step
+- a free voiceover read from the same text, generated on your computer with the Kokoro model. The first use downloads about 90 MB. If a line runs longer than the action, the video holds that frame until it finishes.
+- secret fields blurred in every frame
+- a timeline where you drag, resize, add and delete zooms and trim the start and end
+- export at 1080p/30 fps with captions and voice built in, plus `.srt`/`.vtt` subtitle files. Chrome on Windows and Mac saves MP4 (H.264 + AAC); browsers without an H.264 encoder save WebM.
+
+While recording video there's no control bar on the page (it would end up in the video). Finish from the popup or with `Alt+Shift+R`.
+
 **Edit.** In the editor you can:
 
 - rewrite any step, add detail, reorder, delete (with undo), and insert manual steps, tips or warnings, and section headings
@@ -64,8 +76,9 @@ You can try the editor without capturing anything: open the library and click **
 ```
 src/
   extension/
-    content.ts      watches clicks, typing, dropdowns and Enter on each page; shows the capture bar
-    background.ts   takes screenshots, writes steps, tracks recording state
+    content.ts      watches clicks, typing, dropdowns, Enter and mouse movement on each page; shows the capture bar
+    background.ts   takes screenshots, writes steps, starts/stops video, tracks recording state
+    offscreen.ts    records the tab to WebM (service workers can't use MediaRecorder)
   shared/
     describe.ts     turns an interaction into instruction text; detects secret fields; merges click+type
     zoom.ts         decides which part of each screenshot to show (auto zoom rules)
@@ -73,9 +86,14 @@ src/
     templates.ts    offline SOP and training documents
     ai.ts           Claude calls: step rewriting (structured JSON) and document writing (streamed)
     export.ts       HTML / Markdown / PDF / JSON
-    db.ts           IndexedDB storage (guides and screenshots kept separately)
-  editor/           React editor: library, steps, annotator, preview, SOP and training tabs
-  popup/            toolbar popup: start, pause, finish, discard, recent guides
+    db.ts           IndexedDB storage (guides, screenshots, videos and voice clips kept separately)
+    video/
+      timeline.ts   zoom segments, camera path, smooth cursor, caption timing, voice freezes, subtitles
+      compose.ts    draws one video frame (background, zoom, blur, cursor, ripple, caption)
+      voice.ts      free voiceover (Kokoro, runs in a worker; clips cached per sentence)
+      export.ts     renders the finished MP4/WebM with mediabunny
+  editor/           React editor: library, steps, annotator, preview, SOP, training and video tabs
+  popup/            toolbar popup: start (with or without video), pause, finish, discard, recent guides
 ```
 
 Screenshots use `chrome.tabs.captureVisibleTab`. All positions (highlights, annotations, crop) are stored relative to the image (0–1), so they work at any screen size or zoom level.
@@ -93,6 +111,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 `npm run e2e` loads the built extension in Chromium and checks two things:
 
 - **`tests/e2e.mjs`** captures a sign-in plus project-creation flow on a local test site. It checks the step text, merging, password redaction and screenshots, then exercises the annotator, the SOP and training templates, and HTML export.
+- **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
 - **`tests/e2e-ai.mjs`** runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
 
 ## Limitations
@@ -101,5 +120,8 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 - Chrome allows about two screenshots per second. If you click faster than that, a screenshot can show the page slightly after the click.
 - Browser pages (`chrome://`, the Web Store, the PDF viewer) can't be captured.
 - Apps drawn entirely on a canvas, like Figma or Google Sheets cells, produce generic step text ("Click here"). Edit it, or use *Improve steps with Claude*.
+- Video records one browser tab. Steps taken in other tabs or desktop apps appear in the guide but not in the video.
+- The free voice is generated on the user's computer: a few seconds per sentence, and about 90 MB downloaded the first time.
+- Narrated videos can run longer than the recording, because the video holds a frame until each line finishes. Click more slowly while recording, or shorten the narration lines.
 - There's no cloud sync or share link. Share by exporting PDF, HTML or Markdown, or send the `.scribe.json` file.
 - The desktop-app capture and team workspace features of the commercial Scribe product aren't included.

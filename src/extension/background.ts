@@ -2,8 +2,8 @@
 // and writes steps into IndexedDB as they arrive.
 import { describeEvent, shouldMerge } from '../shared/describe'
 import { deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
-import type { Annotation, CapturedEvent, Guide, NRect, RecorderState, Step } from '../shared/types'
-import { uid } from '../shared/types'
+import type { Annotation, CapturedEvent, CursorSample, Guide, NRect, RecorderState, RedactSample, Step } from '../shared/types'
+import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
 
 const IDLE: RecorderState = { recording: false, paused: false, count: 0 }
 
@@ -94,6 +94,7 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
   const step: Step = {
     id: uid(),
     kind: 'step',
+    time: state.rec ? videoTime(state, event.t ?? now) : undefined,
     title: describeEvent(event),
     action: event.action,
     target: event.target,
@@ -113,6 +114,8 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
   if (shouldMerge(last, event, now)) {
     if (last.imageId) await deleteImage(last.imageId)
     step.click = last.click ?? step.click
+    // The caption starts when they clicked into the field, not when they finished typing.
+    step.time = last.time ?? step.time
     guide.steps[guide.steps.length - 1] = step
   } else {
     guide.steps.push(step)
@@ -120,6 +123,90 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
   guide.updatedAt = now
   await putGuide(guide)
   await setState({ ...state, count: guide.steps.length })
+}
+
+// ---------- video ----------
+
+// Milliseconds into the video for a moment in time, leaving out paused stretches.
+function videoTime(state: RecorderState, epoch: number): number {
+  if (!state.rec) return 0
+  return Math.max(0, epoch - state.rec.startedAt - state.rec.pausedMs)
+}
+
+async function ensureOffscreen() {
+  const contexts = await chrome.runtime.getContexts({ contextTypes: [chrome.runtime.ContextType.OFFSCREEN_DOCUMENT] })
+  if (contexts.length) return
+  await chrome.offscreen.createDocument({
+    url: 'offscreen.html',
+    reasons: [chrome.offscreen.Reason.USER_MEDIA],
+    justification: 'Record the tab while capturing a guide',
+  })
+}
+
+const toOffscreen = <T>(msg: object) => chrome.runtime.sendMessage({ target: 'offscreen', ...msg }) as Promise<T & { error?: string }>
+
+async function startVideo(tabId: number): Promise<{ id: string; startedAt: number; w: number; h: number } | null> {
+  try {
+    const streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: tabId })
+    // Record at the page's real pixel size (sharp on high-resolution screens),
+    // capped at 4K, keeping its shape.
+    const [{ result: size }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => ({ w: innerWidth, h: innerHeight, dpr: devicePixelRatio }),
+    })
+    const scale = Math.min(size?.dpr ?? 1, 3840 / (size?.w || 1280), 2160 / (size?.h || 800))
+    const even = (n: number) => Math.max(2, Math.round(n / 2) * 2)
+    const w = even((size?.w || 1280) * scale)
+    const h = even((size?.h || 800) * scale)
+    await ensureOffscreen()
+    const res = await toOffscreen<{ startedAt: number; w: number; h: number }>({ type: 'rec-start', streamId, w, h })
+    if (res?.error) throw new Error(res.error)
+    return { id: uid(), startedAt: res.startedAt, w: res.w, h: res.h }
+  } catch (err) {
+    console.warn('Video recording could not start; capturing steps only.', err)
+    return null
+  }
+}
+
+async function stopVideo(videoId: string | null): Promise<number> {
+  try {
+    const res = await toOffscreen<{ duration: number }>({ type: 'rec-stop', videoId })
+    return res?.duration ?? 0
+  } catch {
+    return 0
+  } finally {
+    await chrome.offscreen.closeDocument().catch(() => {})
+  }
+}
+
+// Mouse positions and secret-field positions arrive in batches from the page.
+// They're kept in memory and written to the guide every few seconds and at the end.
+let cursorBuf: CursorSample[] = []
+let redactBuf: RedactSample[] = []
+let lastFlush = 0
+
+async function flushTracks(force = false) {
+  if (!force && Date.now() - lastFlush < 5000) return
+  lastFlush = Date.now()
+  if (!cursorBuf.length && !redactBuf.length) return
+  const state = await getState()
+  const guide = state.guideId ? await getGuide(state.guideId) : undefined
+  if (!guide?.video) return
+  guide.video.cursor.push(...cursorBuf)
+  guide.video.redact.push(...redactBuf)
+  cursorBuf = []
+  redactBuf = []
+  await putGuide(guide)
+}
+
+async function addTracks(samples: CursorSample[], rects: NRect[], at: number) {
+  const state = await getState()
+  if (!state.recording || state.paused || !state.rec) return
+  for (const s of samples) cursorBuf.push({ t: videoTime(state, s.t), x: s.x, y: s.y })
+  const prev = redactBuf[redactBuf.length - 1]
+  // Only store a new entry when the secret fields moved or changed.
+  if (!prev || JSON.stringify(prev.rects) !== JSON.stringify(rects)) redactBuf.push({ t: videoTime(state, at), rects })
+  await flushTracks()
 }
 
 // ---------- start / stop ----------
@@ -132,7 +219,7 @@ async function ensureContentScript(tabId: number) {
   }
 }
 
-async function start(title?: string): Promise<RecorderState> {
+async function start(title?: string, opts: { video?: boolean } = {}): Promise<RecorderState> {
   const current = await getState()
   if (current.recording) return current
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
@@ -147,12 +234,26 @@ async function start(title?: string): Promise<RecorderState> {
     steps: [],
     docs: {},
   }
+  const web = tab?.id !== undefined && !!tab.url && /^https?:/.test(tab.url)
+  const video = opts.video && web ? await startVideo(tab.id!) : null
+  if (video) {
+    guide.video = { blobId: video.id, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
+    cursorBuf = []
+    redactBuf = []
+  }
   await putGuide(guide)
-  const state: RecorderState = { recording: true, paused: false, guideId: guide.id, count: 0 }
+  const state: RecorderState = {
+    recording: true,
+    paused: false,
+    guideId: guide.id,
+    count: 0,
+    video: !!video,
+    rec: video ? { id: video.id, startedAt: video.startedAt, pausedMs: 0 } : undefined,
+  }
   await setState(state)
 
-  if (tab?.id !== undefined && tab.url && /^https?:/.test(tab.url)) {
-    await ensureContentScript(tab.id)
+  if (web) {
+    await ensureContentScript(tab!.id!)
     await enqueue(() =>
       addStep(
         {
@@ -161,9 +262,10 @@ async function start(title?: string): Promise<RecorderState> {
           redactRects: [],
           url: tab.url!,
           pageTitle: tab.title ?? '',
+          t: video?.startedAt,
         },
-        tab.windowId,
-        tab.id,
+        tab!.windowId,
+        tab!.id,
       ),
     )
   }
@@ -174,8 +276,15 @@ async function stop(openEditor = true): Promise<RecorderState> {
   await queue
   const state = await getState()
   if (state.guideId) {
+    if (state.rec) await flushTracks(true)
+    const duration = state.rec ? await stopVideo(state.rec.id) : 0
     const guide = await getGuide(state.guideId)
     if (guide) {
+      if (guide.video) {
+        if (duration > 0) guide.video.duration = duration
+        // No usable video (e.g. it failed to save): keep the guide, drop the video.
+        else guide.video = undefined
+      }
       guide.status = 'ready'
       guide.updatedAt = Date.now()
       await putGuide(guide)
@@ -190,7 +299,10 @@ async function stop(openEditor = true): Promise<RecorderState> {
 
 async function discard(): Promise<RecorderState> {
   await queue
-  const { guideId } = await getState()
+  const { guideId, rec } = await getState()
+  if (rec) await stopVideo(null)
+  cursorBuf = []
+  redactBuf = []
   await setState(IDLE)
   if (guideId) await deleteGuide(guideId)
   return IDLE
@@ -199,7 +311,14 @@ async function discard(): Promise<RecorderState> {
 async function togglePause(): Promise<RecorderState> {
   const s = await getState()
   if (!s.recording) return s
-  const next = { ...s, paused: !s.paused }
+  const next: RecorderState = { ...s, paused: !s.paused }
+  if (s.rec) {
+    const now = Date.now()
+    await toOffscreen({ type: next.paused ? 'rec-pause' : 'rec-resume' }).catch(() => {})
+    next.rec = next.paused
+      ? { ...s.rec, pausedAt: now }
+      : { ...s.rec, pausedAt: undefined, pausedMs: s.rec.pausedMs + (s.rec.pausedAt ? now - s.rec.pausedAt : 0) }
+  }
   await setState(next)
   return next
 }
@@ -207,13 +326,16 @@ async function togglePause(): Promise<RecorderState> {
 // ---------- messaging ----------
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
+  if (msg?.target === 'offscreen') return
   const handle = async (): Promise<unknown> => {
     switch (msg?.type) {
       case 'hello':
       case 'getState':
         return getState()
       case 'start':
-        return start(msg.title)
+        return start(msg.title, { video: !!msg.video })
+      case 'cursor':
+        return addTracks(msg.samples as CursorSample[], msg.rects as NRect[], msg.at as number)
       case 'stop':
         return stop(msg.openEditor !== false)
       case 'togglePause':
@@ -235,7 +357,10 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (command !== 'toggle-recording') return
   const s = await getState()
   if (s.recording) await stop()
-  else await start()
+  else {
+    const { recordVideo } = await chrome.storage.local.get('recordVideo')
+    await start(undefined, { video: recordVideo !== false })
+  }
 })
 
 // Pages that were open before the extension loaded have no content script yet.

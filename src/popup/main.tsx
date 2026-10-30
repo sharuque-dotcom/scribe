@@ -14,10 +14,12 @@ function Popup() {
   const [recent, setRecent] = useState<Guide[]>([])
   const [busy, setBusy] = useState(false)
   const [canCapture, setCanCapture] = useState(true)
+  const [video, setVideo] = useState(true)
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
     listGuides().then((g) => setRecent(g.slice(0, 4)))
+    chrome.storage.local.get('recordVideo').then(({ recordVideo }) => setVideo(recordVideo !== false))
     chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => setCanCapture(!!t?.url && /^https?:/.test(t.url)))
     const on = (msg: { type?: string; state?: RecorderState }) => msg?.type === 'state' && msg.state && setState(msg.state)
     chrome.runtime.onMessage.addListener(on)
@@ -51,7 +53,10 @@ function Popup() {
           <div className="flex items-center gap-3 rounded-lg bg-raised p-3">
             <span className={`h-3 w-3 rounded-full ${state.paused ? 'bg-amber-500' : 'animate-pulse bg-rec'}`} />
             <div className="text-sm">
-              <p className="font-semibold">{state.paused ? 'Paused' : 'Capturing'}</p>
+              <p className="font-semibold">
+                {state.paused ? 'Paused' : 'Capturing'}
+                {state.video && <span className="ml-1.5 rounded bg-rec/10 px-1.5 py-0.5 text-[11px] font-semibold text-rec">+ video</span>}
+              </p>
               <p className="text-muted">
                 {state.count} step{state.count === 1 ? '' : 's'} so far
               </p>
@@ -75,12 +80,27 @@ function Popup() {
         </div>
       ) : (
         <div className="space-y-3">
-          <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canCapture && act({ type: 'start', title }, true)} />
-          <button className="btn-danger w-full py-2.5" disabled={busy || !canCapture} onClick={() => act({ type: 'start', title }, true)}>
+          <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canCapture && act({ type: 'start', title, video }, true)} />
+          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line p-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-indigo-600"
+              checked={video}
+              onChange={(e) => {
+                setVideo(e.target.checked)
+                void chrome.storage.local.set({ recordVideo: e.target.checked })
+              }}
+            />
+            <span>
+              <span className="block font-medium">Also record video</span>
+              <span className="block text-xs text-muted">Records this tab only, no camera or microphone. Auto-zoom, captions and voiceover are added afterwards.</span>
+            </span>
+          </label>
+          <button className="btn-danger w-full py-2.5" disabled={busy || !canCapture} onClick={() => act({ type: 'start', title, video }, true)}>
             <Icon name="record" /> Start capturing
           </button>
           <p className="text-xs text-muted">
-            {canCapture ? 'Click through your task as usual. Each click becomes a step with a screenshot. Shortcut: Alt+Shift+R.' : 'Open a website (http or https) to start capturing. Browser pages like chrome:// can’t be captured.'}
+            {canCapture ? `Click through your task as usual. Each click becomes a step with a screenshot. ${video ? 'Finish from this popup or press Alt+Shift+R (there is no on-page bar while recording video).' : 'Shortcut: Alt+Shift+R.'}` : 'Open a website (http or https) to start capturing. Browser pages like chrome:// can’t be captured.'}
           </p>
         </div>
       )}

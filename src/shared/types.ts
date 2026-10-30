@@ -64,6 +64,10 @@ export interface Step {
   labelRect?: NRect
   // Key that identifies the page element, used to merge "click field" + "type into field".
   elementKey?: string
+  // Milliseconds into the video when this step happened (video recordings only).
+  time?: number
+  // What the voiceover and video caption say, if different from the step text.
+  narration?: string
   createdAt: number
 }
 
@@ -89,6 +93,70 @@ export interface Guide {
   zoomMode?: 'auto' | 'full' | 'always'
   // Show a small full-page thumbnail on zoomed screenshots. Unset means on.
   zoomInset?: boolean
+  // A screen recording made alongside the steps, if video was on.
+  video?: GuideVideo
+}
+
+// ---------- video ----------
+
+// Mouse position over time. t is ms into the video; x/y are 0..1 of the tab.
+export interface CursorSample {
+  t: number
+  x: number
+  y: number
+}
+
+// Where secret fields were on screen at a moment, so they can be blurred.
+export interface RedactSample {
+  t: number
+  rects: NRect[]
+}
+
+// A stretch of video that zooms in. Times are ms into the recording.
+export interface ZoomSegment {
+  id: string
+  start: number
+  end: number
+  scale: number
+}
+
+export type VideoBackground = 'gradient' | 'dark' | 'light' | 'none'
+
+export interface VideoSettings {
+  captions: boolean
+  voice: boolean
+  voiceName: string
+  zoomScale: number
+  background: VideoBackground
+}
+
+export interface GuideVideo {
+  blobId: string
+  duration: number
+  w: number
+  h: number
+  cursor: CursorSample[]
+  redact: RedactSample[]
+  // Unset means zooms are worked out automatically from the clicks.
+  zooms?: ZoomSegment[]
+  trimStart: number
+  // Unset means the end of the recording.
+  trimEnd?: number
+  settings: VideoSettings
+}
+
+export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {
+  captions: true,
+  voice: true,
+  voiceName: 'af_heart',
+  zoomScale: 1.8,
+  background: 'gradient',
+}
+
+export interface StoredVideo {
+  id: string
+  blob: Blob
+  mime: string
 }
 
 export interface StoredImage {
@@ -112,13 +180,28 @@ export interface CapturedEvent {
   elementKey?: string
   url: string
   pageTitle: string
+  // When it happened (Date.now()), used to place the step in the video.
+  t?: number
 }
 
 export interface RecorderState {
   recording: boolean
   paused: boolean
+  // Recording the tab as video too. The page shows no control bar then,
+  // so it stays out of the video.
+  video?: boolean
+  rec?: VideoRecording
   guideId?: string
   count: number
+}
+
+// Bookkeeping for a video being recorded right now.
+export interface VideoRecording {
+  id: string
+  startedAt: number
+  // Total time spent paused, so step times line up with the video.
+  pausedMs: number
+  pausedAt?: number
 }
 
 export const uid = (): string =>

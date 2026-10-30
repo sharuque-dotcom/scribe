@@ -19,7 +19,7 @@ function useHash() {
 
 function App() {
   const hash = useHash()
-  const m = hash.match(/^#\/guide\/([^/]+)(?:\/(preview|sop|training))?$/)
+  const m = hash.match(/^#\/guide\/([^/]+)(?:\/(preview|sop|training|video))?$/)
   if (m) return <Workspace key={m[1]} id={m[1]} tab={(m[2] as Tab) ?? 'steps'} />
   return <Library />
 }

@@ -12,14 +12,16 @@ import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
 import { SettingsDialog } from './Settings'
 import { StepCard } from './StepCard'
+import { VideoView } from './VideoView'
 
-export type Tab = 'steps' | 'preview' | DocKind
+export type Tab = 'steps' | 'preview' | DocKind | 'video'
 
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: 'steps', label: 'Steps', icon: 'list' },
   { id: 'preview', label: 'Preview', icon: 'eye' },
   { id: 'sop', label: 'SOP', icon: 'doc' },
   { id: 'training', label: 'Training', icon: 'cap' },
+  { id: 'video', label: 'Video', icon: 'video' },
 ]
 
 function newStep(kind: StepKind): Step {
@@ -60,7 +62,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
 
   // Flattened screenshots are needed by the preview, documents and exports.
   useEffect(() => {
-    if (!guide || tab === 'steps') return
+    if (!guide || tab === 'steps' || tab === 'video') return
     let live = true
     const t = window.setTimeout(() => {
       renderAll(guide, images).then((r) => live && setRendered(r))
@@ -426,6 +428,8 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
           toast={setToast}
         />
       )}
+
+      {tab === 'video' && <VideoView guide={guide} update={update} toast={setToast} />}
 
       {annotStep && annotImage && (
         <Annotator

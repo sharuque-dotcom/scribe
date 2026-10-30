@@ -33,6 +33,9 @@ const PATHS: Record<string, string> = {
   spotlight: 'M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0M12 2v3M12 19v3M2 12h3M19 12h3',
   crop: 'M6 2v14a2 2 0 0 0 2 2h14M2 6h14a2 2 0 0 1 2 2v14',
   target: 'M12 12m-8 0a8 8 0 1 0 16 0a8 8 0 1 0 -16 0M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0',
+  video: 'M3 6h12v12H3zM15 10l6-3v10l-6-3',
+  play: 'M7 4l13 8-13 8z',
+  pause: 'M7 4h3v16H7zM14 4h3v16h-3z',
 }
 
 export function Icon({ name, className = 'h-4 w-4' }: { name: keyof typeof PATHS | string; className?: string }) {
