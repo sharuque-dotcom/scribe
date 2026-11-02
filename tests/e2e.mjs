@@ -263,11 +263,18 @@ try {
   console.log('   checkout tab:', checkoutPage.url())
   check(/^https:\/\/(buy\.polar\.sh\/polar_cl_|polar\.sh\/checkout\/)/.test(checkoutPage.url()), 'Upgrade to Pro opens the Polar checkout')
   await checkoutPage.close()
-  const licensePage = ctx.waitForEvent('page')
+  // Enter license key: the key goes in right here in the popup.
+  polar.restore()
   await popup.getByRole('button', { name: 'Enter license key' }).click()
-  const lp = await licensePage
-  await lp.getByLabel('License key').waitFor()
-  check(lp.url().endsWith('#/license'), 'Enter license key opens the license screen')
+  await popup.getByLabel('License key').fill('STEPCRUMB-NOPE')
+  await popup.getByRole('button', { name: 'Activate' }).click()
+  await popup.getByRole('alert').filter({ hasText: 'wasn’t found' }).waitFor()
+  check(true, 'popup: a wrong key shows an error')
+  await popup.getByLabel('License key').fill(TEST_KEY)
+  await popup.getByRole('button', { name: 'Activate' }).click()
+  await popup.getByText('StepCrumb Pro · active').waitFor()
+  check(true, 'popup: entering the key activates Pro right in the popup')
+  check((await popup.getByText('Pro', { exact: true }).count()) >= 1, 'popup badge shows Pro')
   console.log('\nAll checks passed. Screenshots in', out)
 } finally {
   await ctx.close()

@@ -25,29 +25,44 @@ function init() {
   // screenshot shows the page an event happened on.
   const pageId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
-  // Ask for a spare screenshot of this page when it's quiet: just after it
-  // loads, and every so often while typing. Throttled to one per 700ms.
-  let lastPreshot = 0
-  let preshotTimer = 0
-  const preshot = () => {
+  // A counter that goes up whenever the page visibly changes. Every event and
+  // every screenshot carries it, so the background can pick the screenshot that
+  // shows the page exactly as it was when the user acted (not a moment later).
+  let seq = 0
+  // When the page has been quiet for a moment after a change, ask for a spare
+  // screenshot. At normal speed, the state the user acts on is then already captured.
+  let idleTimer = 0
+  const scheduleIdle = () => {
+    window.clearTimeout(idleTimer)
     if (!state.recording || state.paused || state.mode === 'video') return
-    window.clearTimeout(preshotTimer)
-    preshotTimer = window.setTimeout(
-      () => {
-        lastPreshot = Date.now()
-        chrome.runtime.sendMessage({ type: 'preshot' }).catch(() => {})
-      },
-      Math.max(0, lastPreshot + 700 - Date.now()),
-    )
+    idleTimer = window.setTimeout(() => {
+      chrome.runtime.sendMessage({ type: 'preshot', page: pageId, seq }).catch(() => {})
+    }, 300)
   }
+  const bump = () => {
+    seq++
+    scheduleIdle()
+  }
+  new MutationObserver((records) => {
+    // Our own control bar changing doesn't count.
+    if (records.some((r) => !bar.owns(r.target))) bump()
+  }).observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'open', 'hidden', 'checked', 'value', 'selected', 'disabled', 'aria-expanded', 'aria-selected', 'aria-hidden', 'aria-checked', 'src'],
+  })
+  for (const type of ['input', 'change']) document.addEventListener(type, bump, true)
+  addEventListener('scroll', bump, { capture: true, passive: true })
 
-  let loadedShot = false
+  let started = false
   const apply = (s: RecorderState) => {
     state = s
     bar.update(s)
-    if (s.recording && !loadedShot) {
-      loadedShot = true
-      window.setTimeout(preshot, 500)
+    if (s.recording && !started) {
+      started = true
+      scheduleIdle()
     }
   }
 
@@ -61,8 +76,8 @@ function init() {
       // Hide the bar and reply once a frame without it has been painted.
       // Also report secret fields as they are right now, since the user may
       // have typed since the click.
-      bar.hold(800)
-      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), page: pageId })))
+      bar.hold(500)
+      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), page: pageId, seq })))
       return true
     }
   })
@@ -187,8 +202,6 @@ function init() {
     true,
   )
 
-  document.addEventListener('input', () => active() && preshot(), true)
-
   document.addEventListener(
     'focusout',
     (e) => {
@@ -252,6 +265,8 @@ function init() {
       elementKey: elementKey(el),
       url: location.href,
       page: pageId,
+      // The page's state just before this action took effect.
+      seq,
       pageTitle: document.title,
       t: Date.now(),
       ...extra,
@@ -470,6 +485,9 @@ function createBar() {
     },
     contains(e: Event) {
       return e.composedPath().includes(host)
+    },
+    owns(node: Node) {
+      return node === host || host.contains(node)
     },
   }
 }

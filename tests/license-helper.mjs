@@ -22,7 +22,7 @@ export async function fakeLicenseServer(ctx) {
     if (good && path.endsWith('/validate') && body.activation_id === 'act-test') [status, out] = [200, key]
     await route.fulfill({ status, headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' }, body: JSON.stringify(out) })
   })
-  return { calls, revoke: () => (revoked = true) }
+  return { calls, revoke: () => (revoked = true), restore: () => (revoked = false) }
 }
 
 // Opens Settings from the plan badge, tries a wrong key, then the right one.

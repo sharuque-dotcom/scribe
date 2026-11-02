@@ -195,6 +195,8 @@ export interface CapturedEvent {
   url: string
   // Which page (document) the event happened on, so its screenshot can be checked.
   page?: string
+  // The page's change counter when the event happened (see content.ts).
+  seq?: number
   pageTitle: string
   // When it happened (Date.now()), used to place the step in the video.
   t?: number

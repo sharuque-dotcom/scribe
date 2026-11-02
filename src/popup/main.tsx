@@ -5,7 +5,7 @@ import { listGuides } from '../shared/db'
 import type { CaptureMode, Guide, RecorderState } from '../shared/types'
 import { Icon, timeAgo } from '../editor/ui'
 import { usePlan } from '../editor/usePlan'
-import { LICENSE_CONFIG } from '../shared/license'
+import { activateLicense, LICENSE_CONFIG } from '../shared/license'
 
 const send = <T,>(msg: object) => chrome.runtime.sendMessage(msg) as Promise<T>
 const MODES: { id: CaptureMode; label: string; hint: string }[] = [
@@ -16,6 +16,72 @@ const MODES: { id: CaptureMode; label: string; hint: string }[] = [
 
 const openEditor = (hash = '') => chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html${hash}`) })
 
+// Upgrade and license key entry, right in the popup.
+function LicenseBox({ pro, lapsed, onActivated }: { pro: boolean; lapsed: boolean; onActivated: () => void }) {
+  const [entering, setEntering] = useState(false)
+  const [key, setKey] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const activate = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await activateLicense(key)
+      onActivated()
+    } catch (err) {
+      setError((err as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+  if (pro) {
+    return (
+      <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900" role="status">
+        <p className="font-semibold">StepCrumb Pro · active</p>
+        <p className="text-xs">Every Pro feature is unlocked on this computer.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="mt-4 rounded-lg border border-line p-3">
+      <p className="mb-2 text-xs text-muted">{lapsed ? 'Your Pro access has ended. Your guides are safe.' : 'Pro: Word, HTML & Markdown, no branding, 1080p video, all voices.'}</p>
+      <button className="btn-primary w-full" onClick={() => void chrome.tabs.create({ url: LICENSE_CONFIG.checkoutUrl })}>
+        Upgrade to Pro
+      </button>
+      {entering ? (
+        <div className="mt-3">
+          <div className="flex gap-2">
+            <input
+              autoFocus
+              className="input font-mono text-xs"
+              placeholder="STEPCRUMB-…"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && key.trim() && void activate()}
+              aria-label="License key"
+            />
+            <button className="btn-secondary" onClick={() => void activate()} disabled={busy || !key.trim()}>
+              {busy ? 'Checking…' : 'Activate'}
+            </button>
+          </div>
+          {error && (
+            <p className="mt-2 text-xs text-rec" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="mt-2 text-xs text-muted hover:text-ink" onClick={() => openEditor('#/license')}>
+            More license options →
+          </button>
+        </div>
+      ) : (
+        <button className="mt-2 w-full text-center text-xs font-medium text-muted hover:text-ink" onClick={() => setEntering(true)}>
+          Enter license key
+        </button>
+      )}
+    </div>
+  )
+}
+
 function Popup() {
   const [state, setState] = useState<RecorderState | null>(null)
   const [title, setTitle] = useState('')
@@ -24,6 +90,7 @@ function Popup() {
   const [canCapture, setCanCapture] = useState(true)
   const [mode, setMode] = useState<CaptureMode>('screenshots')
   const { plan, pro, ready, lapsed } = usePlan()
+  const [justActivated, setJustActivated] = useState(false)
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
@@ -131,19 +198,7 @@ function Popup() {
         </div>
       )}
 
-      {!state.recording && ready && !pro && (
-        <div className="mt-4 rounded-lg border border-line p-3">
-          <p className="mb-2 text-xs text-muted">
-            {lapsed ? 'Your Pro access has ended. Your guides are safe.' : 'Pro: Word, HTML & Markdown, no branding, 1080p video, all voices.'}
-          </p>
-          <button className="btn-primary w-full" onClick={() => void chrome.tabs.create({ url: LICENSE_CONFIG.checkoutUrl })}>
-            Upgrade to Pro
-          </button>
-          <button className="mt-2 w-full text-center text-xs font-medium text-muted hover:text-ink" onClick={() => openEditor('#/license')}>
-            Enter license key
-          </button>
-        </div>
-      )}
+      {!state.recording && ready && (!pro || justActivated) && <LicenseBox pro={pro} lapsed={lapsed} onActivated={() => setJustActivated(true)} />}
 
       {recent.length > 0 && (
         <div className="mt-5 border-t border-line pt-3">

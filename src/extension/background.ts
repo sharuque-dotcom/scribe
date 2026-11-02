@@ -40,19 +40,20 @@ interface Shot {
   w: number
   h: number
   redact?: NRect[]
-  // Which page (document) was showing when it was taken, as reported by that page.
+  // Which page (document) was showing, and its change counter, as reported by that page.
   page?: string
+  seq?: number
 }
 
 // Ask the page to hide the capture bar and say which page it is. A page that
 // is navigating away won't answer, so don't wait long.
-async function prepare(tabId: number | undefined): Promise<{ redactRects?: NRect[]; page?: string } | undefined> {
+async function prepare(tabId: number | undefined): Promise<{ redactRects?: NRect[]; page?: string; seq?: number } | undefined> {
   if (tabId === undefined) return undefined
   const reply = await Promise.race([
     chrome.tabs.sendMessage(tabId, { type: 'prepareCapture' }).catch(() => undefined),
     sleep(150).then(() => undefined),
   ])
-  return reply as { redactRects?: NRect[]; page?: string } | undefined
+  return reply as { redactRects?: NRect[]; page?: string; seq?: number } | undefined
 }
 
 async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
@@ -77,21 +78,34 @@ async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRec
         dataUrl = await blobToDataUrl(await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 }))
       }
       bmp.close()
-      return { dataUrl, ...size, redact, page: reply?.page }
+      return { dataUrl, ...size, redact, page: reply?.page, seq: reply?.seq }
     } catch (err) {
       if (attempt >= 3) throw err
     }
   }
 }
 
-// The newest screenshot of each recent page, so a step can use a picture of the
-// page it happened on when the browser has already moved to the next page.
-const pageShots = new Map<string, Shot>()
+// Recent screenshots of each recent page, labelled with the page's change
+// counter, so a step can use the one that shows the page as it was when the
+// user acted.
+const pageShots = new Map<string, Shot[]>()
 function remember(shot: Shot) {
   if (!shot.page) return
+  const list = pageShots.get(shot.page) ?? []
   pageShots.delete(shot.page)
-  pageShots.set(shot.page, shot)
-  while (pageShots.size > 8) pageShots.delete(pageShots.keys().next().value!)
+  pageShots.set(shot.page, [...list, shot].slice(-5))
+  while (pageShots.size > 4) pageShots.delete(pageShots.keys().next().value!)
+}
+// The screenshot of `page` showing exactly state `seq`, or else the newest one
+// taken before it.
+function storedShot(page: string, seq: number, exact: boolean): Shot | undefined {
+  const list = pageShots.get(page) ?? []
+  for (let i = list.length - 1; i >= 0; i--) {
+    const s = list[i]
+    if (s.seq === undefined) continue
+    if (exact ? s.seq === seq : s.seq <= seq) return s
+  }
+  return undefined
 }
 
 function capture(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
@@ -111,29 +125,40 @@ function capture(windowId: number, tabId?: number, fallbackRedact: NRect[] = [])
   )
 }
 
-// Events from the same moment (typing that ends with a click, Enter that
-// submits) share one capture, taken as soon as they arrive.
-const recentShot = new Map<number, { at: number; shot: Promise<Shot> }>()
+// The screenshot for a step: the page exactly as it was at the action.
 async function shotForEvent(windowId: number, tabId: number | undefined, event: CapturedEvent): Promise<Shot> {
-  const key = tabId ?? -1
-  const prev = recentShot.get(key)
-  let pending: Promise<Shot>
-  if (prev && Date.now() - prev.at < 250) pending = prev.shot
-  else {
-    pending = capture(windowId, tabId, event.redactRects)
-    recentShot.set(key, { at: Date.now(), shot: pending })
-  }
-  const shot = await pending
-  // The click already opened another page: use the newest picture of the page
-  // the step happened on instead.
-  if (event.page && shot.page !== event.page) return pageShots.get(event.page) ?? shot
+  const { page, seq } = event
+  if (!page || seq === undefined) return capture(windowId, tabId, event.redactRects)
+  // 1. Already captured (a quiet-moment screenshot, or the same moment as another step).
+  let hit = storedShot(page, seq, true)
+  if (hit) return hit
+  // A capture already under way may be exactly this moment; wait for it, then look again.
+  await captureChain
+  hit = storedShot(page, seq, true)
+  if (hit) return hit
+  // 2. Take one now.
+  const shot = await capture(windowId, tabId, event.redactRects)
+  if (shot.page === page && shot.seq === seq) return shot
+  // 3. The page already changed (the click took effect, or another page opened):
+  // use the newest screenshot from before the action, so a step never shows its own result.
+  if (shot.page !== page || (shot.seq !== undefined && shot.seq > seq)) return storedShot(page, seq, false) ?? shot
   return shot
 }
 
-// A spare screenshot while the page is quiet (just loaded, or while typing), so
-// there is always a recent picture of the current page to fall back on.
-function preshot(windowId: number, tabId: number) {
-  if (capturing > 0 || Date.now() - lastCapture < MIN_GAP_MS) return
+// A spare screenshot when the page has been quiet for a moment, so the state the
+// user acts on next is usually already captured. Skipped if it's already stored
+// or would delay a step's screenshot.
+const preshotTimers = new Map<number, ReturnType<typeof setTimeout>>()
+function preshot(windowId: number, tabId: number, page?: string, seq?: number) {
+  clearTimeout(preshotTimers.get(tabId))
+  preshotTimers.delete(tabId)
+  if (page && seq !== undefined && storedShot(page, seq, true)) return
+  // Chrome's limit is busy: try again as soon as it frees up.
+  const wait = capturing > 0 ? MIN_GAP_MS : lastCapture + MIN_GAP_MS - Date.now()
+  if (wait > 0) {
+    preshotTimers.set(tabId, setTimeout(() => preshot(windowId, tabId, page, seq), wait + 20))
+    return
+  }
   capture(windowId, tabId).catch(() => {})
 }
 
@@ -514,7 +539,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       }
       case 'preshot': {
         const st = await getState()
-        if (st.recording && !st.paused && st.mode !== 'video' && sender.tab?.active && sender.tab.id !== undefined) preshot(sender.tab.windowId, sender.tab.id)
+        if (st.recording && !st.paused && st.mode !== 'video' && sender.tab?.active && sender.tab.id !== undefined) preshot(sender.tab.windowId, sender.tab.id, msg.page as string | undefined, msg.seq as number | undefined)
         return null
       }
       default:

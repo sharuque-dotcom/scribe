@@ -3,12 +3,13 @@
 main{padding:28px;max-width:460px}label{display:block;font-weight:600;margin:14px 0 6px}
 input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font-size:16px}
 .plans{display:flex;gap:8px}button{padding:10px 16px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:600}
-.plans button{background:#e2e8f0;color:#0f172a}</style></head>
+.plans button{background:#e2e8f0;color:#0f172a}.plans button.sel{background:#0f172a;color:#fff}</style></head>
 <body><header><strong>Projectly</strong> · Billing</header>
 <main><h1>Payment method</h1>
 <div class="plans"><button id="monthly">Monthly</button><button id="yearly">Yearly</button><button id="team">Team</button></div>
 <label for="card">Card number</label><input id="card" name="cardnumber" autocomplete="cc-number" inputmode="numeric">
 <label for="holder">Name on card</label><input id="holder" name="holder">
 <button id="save" style="margin-top:18px">Save card</button></main>
-<script>document.getElementById('save').onclick=()=>{location.href='deals.html'}</script>
+<script>document.getElementById('save').onclick=()=>{location.href='deals.html'}
+for(const b of document.querySelectorAll('.plans button'))b.onclick=()=>{for(const o of document.querySelectorAll('.plans button'))o.classList.remove('sel');b.classList.add('sel')}</script>
 </body></html>
