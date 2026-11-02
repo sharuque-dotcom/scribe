@@ -11,4 +11,6 @@ export const CONFIG = {
   foundingSold: null as number | null,
   pro: { monthly: 8, yearly: 69 },
   contactEmail: 'hello@stepcrumb.com',
+  // Where customers see their key, invoices and computers, and manage subscriptions.
+  portalUrl: 'https://polar.sh/stepcrumb/portal',
 }
