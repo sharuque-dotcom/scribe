@@ -64,7 +64,7 @@ To connect your store, edit `LICENSE_CONFIG` at the top of `src/shared/license.t
 - `buyUrl`: your pricing page (every "Get a license" link goes there)
 - `storeId` and `productIds`: from the Lemon Squeezy dashboard, so keys from other stores are rejected
 
-In Lemon Squeezy, turn on **license keys** for the product and set the activation limit (e.g. 3 browsers per key). Customers can free up an activation with **Remove license from this browser** in Settings.
+In Lemon Squeezy, turn on **license keys** for the product and set the **activation limit to 2** (one person, two computers). Settings shows who the license belongs to. There's no self-service "remove" button, so keys can't be casually passed on: to move a key, the customer emails `supportEmail` and you reset its activations in the Lemon Squeezy dashboard. If a key is clearly being shared, disable it there; the app returns to the free plan at its next check.
 
 This is a local check, so a technical user could get around it. That's normal for software that runs entirely on the user's computer.
 

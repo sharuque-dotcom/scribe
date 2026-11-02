@@ -31,6 +31,8 @@ export async function activateInSettings(page, check) {
   await page.getByRole('button', { name: 'Activate' }).click()
   await page.getByText('StepCrumb Founding 1,000 · active').waitFor()
   check(true, 'license activates and shows the plan name')
+  check((await page.getByText('Licensed to test@example.com').count()) === 1, 'Settings shows who the license belongs to')
+  check((await page.getByRole('button', { name: /Remove license/ }).count()) === 0, 'no self-service button to pass the key on')
   await page.keyboard.press('Escape')
   await page.getByRole('button', { name: 'Founding 1,000' }).first().waitFor()
 }

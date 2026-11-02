@@ -34,7 +34,7 @@ function Terms() {
       <h1>Terms</h1>
       <p className="lead">The short version: use StepCrumb for your work, don't resell it, and we'll keep it working.</p>
       <h2>License</h2>
-      <p>The free plan may be used by anyone. A paid license is for one person and may be activated on up to 3 browsers. Founding (lifetime) licenses include future updates for as long as StepCrumb is offered.</p>
+      <p>The free plan may be used by anyone. A paid license is for one person and may be used on up to 2 computers at a time. To move it to a different computer, contact us and we'll reset it. Sharing a license with other people isn't allowed, and shared keys may be disabled. Founding (lifetime) licenses include future updates for as long as StepCrumb is offered.</p>
       <h2>Refunds</h2>
       <p>If StepCrumb isn't right for you, email <a href={`mailto:${CONFIG.contactEmail}`}>{CONFIG.contactEmail}</a> within 14 days of purchase for a full refund. Refunded keys stop working.</p>
       <h2>Your content</h2>

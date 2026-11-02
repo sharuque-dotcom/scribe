@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { loadSettings, MODEL, saveSettings, type AiSettings } from '../../shared/ai'
-import { activateLicense, deactivateLicense, LICENSE_CONFIG } from '../../shared/license'
+import { activateLicense, LICENSE_CONFIG } from '../../shared/license'
 import { usePlan } from '../usePlan'
 import { Modal } from '../ui'
 
@@ -27,19 +27,18 @@ function LicenseSection() {
     return (
       <section className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm" aria-label="License">
         <p className="font-semibold text-green-900">StepCrumb {plan} · active</p>
-        {license.email && <p className="text-xs text-green-900/70">{license.email}</p>}
-        <button
-          className="mt-2 text-xs font-medium text-green-900/70 hover:text-rec"
-          disabled={busy}
-          onClick={async () => {
-            if (!confirm('Remove the license from this browser? You can use the key on another computer afterwards.')) return
-            setBusy(true)
-            await deactivateLicense(license)
-            setBusy(false)
-          }}
-        >
-          Remove license from this browser
-        </button>
+        {license.email && (
+          <p className="mt-0.5 text-green-900">
+            Licensed to <b>{license.email}</b>
+          </p>
+        )}
+        <p className="mt-2 text-xs text-green-900/70">
+          Each license works on {LICENSE_CONFIG.activations} computers. Moving to a new one? Email{' '}
+          <a className="underline" href={`mailto:${LICENSE_CONFIG.supportEmail}?subject=Move%20my%20StepCrumb%20license`}>
+            {LICENSE_CONFIG.supportEmail}
+          </a>{' '}
+          and we'll move it for you.
+        </p>
       </section>
     )
   }
@@ -54,7 +53,21 @@ function LicenseSection() {
         </button>
       </div>
       {license && !pro && <p className="mt-2 text-xs text-rec">Your license is {license.status === 'expired' ? 'expired' : 'no longer active'}. Enter a new key or renew.</p>}
-      {error && <p className="mt-2 text-xs text-rec" role="alert">{error}</p>}
+      {error && (
+        <p className="mt-2 text-xs text-rec" role="alert">
+          {error}
+          {/activation limit/i.test(error) && (
+            <>
+              {' '}
+              Each license works on {LICENSE_CONFIG.activations} computers. To move it here, email{' '}
+              <a className="underline" href={`mailto:${LICENSE_CONFIG.supportEmail}?subject=Move%20my%20StepCrumb%20license`}>
+                {LICENSE_CONFIG.supportEmail}
+              </a>
+              .
+            </>
+          )}
+        </p>
+      )}
       <a className="mt-2 inline-block text-xs font-medium text-accent hover:underline" href={LICENSE_CONFIG.buyUrl} target="_blank" rel="noreferrer">
         Get a license →
       </a>

@@ -6,6 +6,10 @@
 export const LICENSE_CONFIG = {
   // Where "Upgrade" buttons go.
   buyUrl: 'https://stepcrumb.com/#pricing',
+  // Buyers email here to move a key to another computer (reset activations
+  // in the Lemon Squeezy dashboard). Each key works on 2 computers.
+  supportEmail: 'hello@stepcrumb.com',
+  activations: 2,
   // Fill these in from the Lemon Squeezy dashboard so keys from other stores
   // or products are rejected. Left empty, any valid Lemon Squeezy key works.
   storeId: null as number | null,

@@ -149,7 +149,7 @@ export function Compare() {
 }
 
 const FREE = ['Unlimited guides and screenshots', 'Auto-zoom screenshots with highlights', 'SOP and training templates', 'PDF export (with a small StepCrumb footer)', 'Video up to 2 minutes, 720p, watermark', 'Voiceover with 1 voice']
-const PAID = ['Everything in Free, without limits', 'No branding on PDFs', 'Word, HTML and Markdown export', 'Video in 1080p, any length, no watermark', 'All 6 voices and all video backgrounds', 'Use on up to 3 browsers']
+const PAID = ['Everything in Free, without limits', 'No branding on PDFs', 'Word, HTML and Markdown export', 'Video in 1080p, any length, no watermark', 'All 6 voices and all video backgrounds', 'Use on 2 computers']
 
 function Check({ children }: { children: ReactNode }) {
   return (
@@ -243,7 +243,7 @@ const FAQS: [string, string][] = [
   ['Is everything really on my computer?', 'Yes. Screenshots, recordings, guides, documents and voiceovers are stored in your browser on your computer. StepCrumb only goes online to check a license key, and once to download the free voice model. If you choose to use the optional Claude writing feature with your own API key, that text goes to Anthropic only when you click it.'],
   ['Which browsers and computers does it work on?', 'Chrome and Microsoft Edge (and other Chromium browsers) on Windows, Mac, Linux and ChromeOS. It records one browser tab, so it works with anything you can open in a browser.'],
   ['Do I need an account?', 'No. The free plan needs nothing at all. When you buy, a license key arrives by email; paste it into Settings and the paid features unlock.'],
-  ['What does “lifetime” mean?', `One payment of $${CONFIG.founding.price} unlocks every paid feature for as long as StepCrumb exists, including updates. Your key works on up to 3 browsers, and you can move it whenever you like.`],
+  ['What does “lifetime” mean?', `One payment of $${CONFIG.founding.price} unlocks every paid feature for as long as StepCrumb exists, including updates. Your key works on 2 computers (say, work and home). Getting a new computer? Email us and we'll move it.`],
   ['What happens after the first 1,000?', `Lifetime access closes and new customers pay $${CONFIG.pro.monthly}/month or $${CONFIG.pro.yearly}/year. Founding members keep lifetime access.`],
   ['What can I export?', 'Guides and documents export to PDF, Word, HTML and Markdown. Videos export as MP4 with captions and voiceover built in, plus subtitle files (SRT and VTT) for YouTube or your learning platform.'],
   ['Can it record desktop apps?', 'Not yet. StepCrumb records what happens in the browser. You can still add steps by hand and upload a screenshot for anything outside it.'],
