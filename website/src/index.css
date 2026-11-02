@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html { scroll-behavior: smooth; }
+body { @apply bg-paper font-sans text-ink antialiased; }
+::selection { background: #c7d2fe; }
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-[15px] font-semibold transition-all duration-200 will-change-transform; }
+  .btn-dark { @apply btn bg-ink text-paper hover:-translate-y-0.5 hover:shadow-float; }
+  .btn-ghost { @apply btn border border-ink/80 text-ink hover:bg-ink hover:text-paper; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.18em] text-soft; }
+  .display { @apply font-sans font-bold tracking-[-0.045em] leading-[1.02]; }
+}
+
+/* "Art" backgrounds: slowly drifting colour fields with film grain. */
+.art { position: relative; overflow: hidden; isolation: isolate; }
+.art::before, .art::after { content: ''; position: absolute; inset: -30%; z-index: -2; filter: blur(48px) saturate(1.15); animation: drift 18s ease-in-out infinite alternate; }
+.art::after { z-index: -1; inset: 0; filter: none; animation: none; opacity: .22; mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+.art-sky::before { background: radial-gradient(40% 50% at 20% 25%, #93c5fd 0, transparent 70%), radial-gradient(45% 55% at 80% 30%, #e0f2fe 0, transparent 70%), radial-gradient(50% 60% at 60% 85%, #60a5fa 0, transparent 70%), radial-gradient(35% 45% at 15% 85%, #bef264 0, transparent 70%), #3b82f6; }
+.art-dusk::before { background: radial-gradient(40% 50% at 25% 30%, #fdba74 0, transparent 70%), radial-gradient(45% 55% at 75% 25%, #f9a8d4 0, transparent 70%), radial-gradient(50% 60% at 55% 85%, #c084fc 0, transparent 70%), #fb7185; }
+.art-meadow::before { background: radial-gradient(40% 50% at 25% 30%, #d9f99d 0, transparent 70%), radial-gradient(45% 55% at 80% 35%, #fde68a 0, transparent 70%), radial-gradient(50% 60% at 50% 90%, #34d399 0, transparent 70%), #84cc16; }
+.art-violet::before { background: radial-gradient(40% 50% at 20% 30%, #c4b5fd 0, transparent 70%), radial-gradient(45% 55% at 80% 25%, #a5b4fc 0, transparent 70%), radial-gradient(50% 60% at 55% 85%, #f0abfc 0, transparent 70%), #6366f1; }
+.art-ink::before { background: radial-gradient(40% 50% at 25% 25%, #312e81 0, transparent 70%), radial-gradient(45% 55% at 80% 35%, #1e3a8a 0, transparent 70%), radial-gradient(50% 60% at 50% 90%, #4c1d95 0, transparent 70%), #0f172a; }
+@keyframes drift { 0% { transform: translate3d(-3%, -2%, 0) rotate(0deg) scale(1); } 100% { transform: translate3d(3%, 2%, 0) rotate(8deg) scale(1.08); } }
+
+/* Glowing, rotating border for the founding plan. */
+@property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+.glow-border { position: relative; }
+.glow-border::before { content: ''; position: absolute; inset: -2px; border-radius: inherit; padding: 2px; z-index: 0;
+  background: conic-gradient(from var(--angle), #f97316, #ec4899, #6366f1, #22d3ee, #f97316);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: spin 6s linear infinite; }
+@keyframes spin { to { --angle: 360deg; } }
+
+.marquee { animation: marquee 40s linear infinite; }
+@keyframes marquee { to { transform: translateX(-50%); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+}
+
+.legal h1 { @apply display mb-4 text-[48px]; }
+.legal .lead { @apply mb-8 text-[19px] text-soft; }
+.legal h2 { @apply mb-2 mt-10 text-[20px] font-semibold; }
+.legal p, .legal li { @apply text-[16px] leading-relaxed text-ink/85; }
+.legal ul { @apply ml-5 list-disc space-y-2; }
+.legal a { @apply text-brand underline underline-offset-2; }
