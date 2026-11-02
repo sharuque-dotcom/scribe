@@ -1,4 +1,5 @@
-// Renders the extension icon SVG to PNGs. Run once: node scripts/make-icons.mjs
+// Renders the extension icon SVG to PNGs, plus the Chrome Web Store icon.
+// Run: node scripts/make-icons.mjs
 import { chromium } from 'playwright-core'
 import { writeFileSync } from 'node:fs'
 
@@ -19,4 +20,9 @@ for (const size of [16, 32, 48, 128]) {
   await page.setContent(`<html><body style="margin:0;background:transparent">${svg.replace('<svg ', `<svg width="${size}" height="${size}" `)}</body></html>`)
   writeFileSync(`public/icons/icon${size}.png`, await page.screenshot({ omitBackground: true }))
 }
+// Chrome Web Store icon: 128×128 with the artwork at 96×96 and 16px of
+// transparent padding, as the store asks.
+await page.setViewportSize({ width: 128, height: 128 })
+await page.setContent(`<html><body style="margin:0;background:transparent"><div style="padding:16px">${svg.replace('<svg ', '<svg width="96" height="96" ')}</div></body></html>`)
+writeFileSync('store/assets/store-icon-128.png', await page.screenshot({ omitBackground: true }))
 await browser.close()

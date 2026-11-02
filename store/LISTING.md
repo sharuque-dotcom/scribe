@@ -66,7 +66,7 @@ Questions? hello@stepcrumb.com
 **Graphics** (all in `store/assets/`)
 | Field | File |
 |---|---|
-| Store icon (128×128) | `public/icons/icon128.png` (already in the zip) |
+| Store icon (128×128) | `store-icon-128.png` (artwork 96×96 with 16px transparent padding) |
 | Screenshot 1 | `screenshot-1-guide.png` |
 | Screenshot 2 | `screenshot-2-blur.png` |
 | Screenshot 3 | `screenshot-3-sop.png` |
