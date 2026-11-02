@@ -212,16 +212,16 @@ export function Pricing() {
                 <Check key={f}>{f}</Check>
               ))}
             </ul>
-            <a href={CONFIG.checkoutUrl} className="lemonsqueezy-button btn-dark mt-8 w-full">
+            <a href={CONFIG.checkoutUrl} target="_blank" rel="noopener" className="btn-dark mt-8 w-full">
               Get lifetime access
             </a>
-            <p className="mt-3 text-center text-[12px] text-soft">Secure checkout by Lemon Squeezy. Your key arrives by email.</p>
+            <p className="mt-3 text-center text-[12px] text-soft">Secure checkout by Polar. Your license key arrives by email.</p>
           </div>
         </div>
 
         <div className="flex flex-col rounded-[28px] border border-line bg-white p-8 shadow-card" data-reveal>
           <p className="text-[18px] font-semibold">Pro</p>
-          <p className="mt-1 text-[14px] text-soft">After the founding spots are gone.</p>
+          <p className="mt-1 text-[14px] text-soft">Prefer to pay as you go? Cancel any time.</p>
           <p className="mt-6 flex items-end gap-2">
             <span className="display text-[56px]">${CONFIG.pro.monthly}</span>
             <span className="mb-3 text-[14px] text-soft">/ month</span>
@@ -232,7 +232,9 @@ export function Pricing() {
               <Check key={f}>{f}</Check>
             ))}
           </ul>
-          <span className="btn mt-8 w-full cursor-default bg-paper text-soft ring-1 ring-line">Opens after the founding {CONFIG.founding.limit.toLocaleString()}</span>
+          <a href={CONFIG.checkoutUrl} target="_blank" rel="noopener" className="btn-ghost mt-8 w-full">
+            Get Pro monthly or yearly
+          </a>
         </div>
       </div>
     </section>
@@ -242,7 +244,7 @@ export function Pricing() {
 const FAQS: [string, string][] = [
   ['Is everything really on my computer?', 'Yes. Screenshots, recordings, guides, documents and voiceovers are stored in your browser on your computer, never on our servers. StepCrumb only goes online to check a license key and, once, to download the free voice model. Neither sends anything you capture.'],
   ['Which browsers and computers does it work on?', 'Chrome and Microsoft Edge (and other Chromium browsers) on Windows, Mac, Linux and ChromeOS. Guides come from anything you can open in a browser. Videos can record a tab, a window or your whole screen.'],
-  ['Do I need an account?', 'No. The free plan needs nothing at all. When you buy, a license key arrives by email; paste it into Settings and the paid features unlock.'],
+  ['Do I need an account?', 'No. The free plan needs nothing at all. When you buy, a license key arrives by email; paste it into StepCrumb (Upgrade → Enter license key) and Pro unlocks.'],
   ['What does “lifetime” mean?', `One payment of $${CONFIG.founding.price} unlocks every paid feature for as long as StepCrumb exists, including updates. Your key works on 2 computers (say, work and home). Getting a new computer? Email us and we'll move it.`],
   ['What happens after the first 1,000?', `Lifetime access closes and new customers pay $${CONFIG.pro.monthly}/month or $${CONFIG.pro.yearly}/year. Founding members keep lifetime access.`],
   ['What can I export?', 'Guides and documents export to PDF, Word, HTML and Markdown. Videos export as MP4 with captions and voiceover built in, plus subtitle files (SRT and VTT) for YouTube or your learning platform.'],

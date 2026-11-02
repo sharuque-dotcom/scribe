@@ -52,9 +52,9 @@ While recording video there's no control bar on the page (it would end up in the
 
 **Export.** You can export guides and documents as PDF (through the print dialog), a standalone HTML page, or Markdown with embedded images. Guides can also be saved as a `.stepcrumb.json` backup and imported again.
 
-## Free and paid
+## Free and Pro
 
-| | Free | Paid (license key) |
+| | Free | Pro |
 |---|---|---|
 | Guides, screenshots, auto-zoom, annotations, SOP/training templates | Unlimited | Unlimited |
 | PDF export | "Made with StepCrumb" footer | No branding |
@@ -63,14 +63,19 @@ While recording video there's no control bar on the page (it would end up in the
 | Voiceover | 1 voice (Heart) | All 6 voices |
 | Video backgrounds | Gradient | All |
 
-Licenses are [Lemon Squeezy](https://www.lemonsqueezy.com) license keys, entered in the editor's **Settings** (or via the **Free · Upgrade** badge). The key is checked when it's entered and then every 3 days; a paid plan keeps working offline for 14 days. Refunded or disabled keys go back to free at the next check.
+All of this is decided in one file, `src/shared/plans.ts`: each Pro feature is listed with its tier, and the code asks `can('exportWord')` and so on. To move a feature between Free and Pro, change its tier there.
 
-To connect your store, edit `LICENSE_CONFIG` at the top of `src/shared/license.ts`:
+**Buying.** Pro is sold through [Polar](https://polar.sh): Lifetime ($49, first 1,000 buyers), Monthly ($8) and Yearly ($69), all on one checkout link. Every purchase includes a license key starting with `STEPCRUMB`. *Upgrade to Pro* buttons (popup, license screen, and wherever a Pro feature is locked) open the checkout in a new tab. *Enter license key* opens the license screen (`editor.html#/license`, also in Settings).
 
-- `buyUrl`: your pricing page (every "Get a license" link goes there)
-- `storeId` and `productIds`: from the Lemon Squeezy dashboard, so keys from other stores are rejected
+**Checking keys.** On entry, StepCrumb registers the computer with Polar's public license API (`/v1/customer-portal/license-keys/activate`), then confirms the key (`/validate`). It re-checks on browser start and once a day. A cancelled or lapsed subscription (Polar no longer accepts the key) drops back to Free and says so; guides and videos are never touched. Without internet, Pro keeps working for 7 days after the last successful check. The license screen shows the plan, who it's licensed to, and a **Manage subscription** link to the Polar customer portal.
 
-In Lemon Squeezy, turn on **license keys** for the product and set the **activation limit to 2** (one person, two computers). Settings shows who the license belongs to. There's no self-service "remove" button, so keys can't be casually passed on: to move a key, the customer emails `supportEmail` and you reset its activations in the Lemon Squeezy dashboard. If a key is clearly being shared, disable it there; the app returns to the free plan at its next check.
+**Setup before release** (`LICENSE_CONFIG` at the top of `src/shared/license.ts`):
+
+- `organizationId`: from Polar → Settings. Until it's filled in, the key screen says licensing isn't set up.
+- `orgSlug`: your Polar organization slug (used for the portal link).
+- In Polar, give each product a **License key** benefit with prefix `STEPCRUMB` and an **activation limit of 2** (one person, two computers). To move a key to a new computer, the customer emails `supportEmail` and you remove an activation in Polar.
+
+**Network.** The license check is the only request StepCrumb makes, apart from the one-time voice model download from Hugging Face (public model files only). The license check sends only the key, the organization ID and the computer's activation. Nothing captured ever leaves the device.
 
 This is a local check, so a technical user could get around it. That's normal for software that runs entirely on the user's computer.
 
@@ -116,7 +121,8 @@ src/
     ai.ts           Claude calls: step rewriting (structured JSON) and document writing (streamed)
     export.ts       HTML / Markdown / PDF / JSON
     docx.ts         Word export for guides and SOP/training documents
-    license.ts      Lemon Squeezy license keys: activate, re-check, offline grace
+    license.ts      Polar license keys: activate, daily re-check, 7-day offline grace
+    plans.ts        Free vs Pro: every Pro feature and the free limits, in one table
     db.ts           IndexedDB storage (guides, screenshots, videos and voice clips kept separately)
     video/
       timeline.ts   zoom segments, camera path, smooth cursor, caption timing, voice freezes, subtitles
@@ -142,7 +148,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 `npm run e2e` loads the built extension in Chromium and checks two things:
 
 - **`tests/e2e.mjs`** captures a sign-in plus project-creation flow on a local test site. It checks the step text, merging, password redaction and screenshots, then exercises the annotator, the SOP and training templates, and HTML export.
-- Both browser tests run each flow twice, on the free plan and after activating a key against a fake Lemon Squeezy server (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video.
+- Both browser tests run each flow twice, on the free plan and after activating a key against a fake Polar API (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video. `e2e.mjs` also cancels the subscription (the fake starts refusing the key), re-checks, and confirms the app drops to Free with guides intact; checks the popup's Upgrade and license links; and logs every host the extension contacts to confirm only the license check goes online.
 - **`tests/e2e-timing.mjs`** types a card number and clicks a button that opens another page straight away, at full speed. It checks that the screenshots show the right page, that the card number is pixelated, and that the control bar never appears in a screenshot.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
 - **`tests/e2e-screen.mjs`** starts a recording through Chrome's share dialog, picks the entire screen, and checks that it's detected as a screen recording and that clicks land at the right spot in the video. Add `video` as the last argument to test video-only mode. It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out screen [video]`.

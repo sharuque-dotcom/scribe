@@ -1,80 +1,8 @@
 import { useState } from 'react'
 import { loadSettings, MODEL, saveSettings, type AiSettings } from '../../shared/ai'
 import { AI_ENABLED } from '../../shared/features'
-import { activateLicense, LICENSE_CONFIG } from '../../shared/license'
-import { usePlan } from '../usePlan'
+import { LicenseSection } from './License'
 import { Modal } from '../ui'
-
-function LicenseSection() {
-  const { license, pro, plan } = usePlan()
-  const [key, setKey] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const activate = async () => {
-    setBusy(true)
-    setError(null)
-    try {
-      await activateLicense(key)
-      setKey('')
-    } catch (err) {
-      setError((err as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (pro && license) {
-    return (
-      <section className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm" aria-label="License">
-        <p className="font-semibold text-green-900">StepCrumb {plan} · active</p>
-        {license.email && (
-          <p className="mt-0.5 text-green-900">
-            Licensed to <b>{license.email}</b>
-          </p>
-        )}
-        <p className="mt-2 text-xs text-green-900/70">
-          Each license works on {LICENSE_CONFIG.activations} computers. Moving to a new one? Email{' '}
-          <a className="underline" href={`mailto:${LICENSE_CONFIG.supportEmail}?subject=Move%20my%20StepCrumb%20license`}>
-            {LICENSE_CONFIG.supportEmail}
-          </a>{' '}
-          and we'll move it for you.
-        </p>
-      </section>
-    )
-  }
-  return (
-    <section className="rounded-lg border border-line p-3 text-sm" aria-label="License">
-      <p className="font-semibold">Free plan</p>
-      <p className="mb-2 text-xs text-muted">Unlock branding-free PDFs, Word/HTML/Markdown, 1080p video without watermark or length limit, and all voices.</p>
-      <div className="flex gap-2">
-        <input className="input font-mono" placeholder="License key" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && activate()} aria-label="License key" />
-        <button className="btn-primary" onClick={activate} disabled={busy || !key.trim()}>
-          {busy ? 'Checking…' : 'Activate'}
-        </button>
-      </div>
-      {license && !pro && <p className="mt-2 text-xs text-rec">Your license is {license.status === 'expired' ? 'expired' : 'no longer active'}. Enter a new key or renew.</p>}
-      {error && (
-        <p className="mt-2 text-xs text-rec" role="alert">
-          {error}
-          {/activation limit/i.test(error) && (
-            <>
-              {' '}
-              Each license works on {LICENSE_CONFIG.activations} computers. To move it here, email{' '}
-              <a className="underline" href={`mailto:${LICENSE_CONFIG.supportEmail}?subject=Move%20my%20StepCrumb%20license`}>
-                {LICENSE_CONFIG.supportEmail}
-              </a>
-              .
-            </>
-          )}
-        </p>
-      )}
-      <a className="mt-2 inline-block text-xs font-medium text-accent hover:underline" href={LICENSE_CONFIG.buyUrl} target="_blank" rel="noreferrer">
-        Get a license →
-      </a>
-    </section>
-  )
-}
 
 export function SettingsDialog({ onClose }: { onClose: (saved?: AiSettings) => void }) {
   const [s, setS] = useState<AiSettings>(loadSettings)

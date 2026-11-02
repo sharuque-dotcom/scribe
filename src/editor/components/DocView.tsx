@@ -5,6 +5,7 @@ import { download, markdownToHtml, markdownWithImages, printHtml, shotsByNumber,
 import { buildSop, buildTraining } from '../../shared/templates'
 import type { DocKind, Guide } from '../../shared/types'
 import { Dropdown, Icon, type ToastData } from '../ui'
+import { exportFeature, FEATURES } from '../../shared/plans'
 import { usePlan } from '../usePlan'
 import { lockedToast } from '../upgrade'
 import { markdownDocx, toBlob } from '../../shared/docx'
@@ -72,8 +73,9 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
   const markdown = streaming ?? doc?.markdown ?? ''
   const shots = useMemo(() => (rendered ? shotsByNumber(guide, rendered) : {}), [guide, rendered])
   const previewMd = streaming !== null ? (throttled ?? '') : markdown
-  const { pro } = usePlan()
-  const html = useMemo(() => wrapHtml(guide.title, markdownToHtml(previewMd, shots), { branded: !pro }), [previewMd, shots, guide.title, pro])
+  const { can } = usePlan()
+  const branded = !can('pdfNoBranding')
+  const html = useMemo(() => wrapHtml(guide.title, markdownToHtml(previewMd, shots), { branded }), [previewMd, shots, guide.title, branded])
 
   const fromTemplate = () => {
     if (doc && !confirm('Replace the current document with a fresh template?')) return
@@ -102,8 +104,9 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
   }
 
   const exportAs = async (format: 'html' | 'pdf' | 'docx' | 'md' | 'copy') => {
-    if (!pro && format !== 'pdf') return toast(lockedToast(format === 'docx' ? 'Word export' : format === 'html' ? 'HTML export' : 'Markdown export'))
-    const full = wrapHtml(guide.title, markdownToHtml(markdown, shots), { branded: !pro })
+    const needs = exportFeature(format)
+    if (needs && !can(needs)) return toast(lockedToast(FEATURES[needs].label))
+    const full = wrapHtml(guide.title, markdownToHtml(markdown, shots), { branded })
     const name = `${slug(guide.title)}-${kind}`
     if (format === 'docx') download(`${name}.docx`, await toBlob(await markdownDocx(guide.title, markdown, shots)))
     else if (format === 'html') download(`${name}.html`, full, 'text/html')
@@ -154,7 +157,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
                     <>
                       {(
                         [
-                          ['pdf', pro ? 'PDF (print / save as PDF)' : 'PDF (with StepCrumb footer)'],
+                          ['pdf', branded ? 'PDF (with StepCrumb footer)' : 'PDF (print / save as PDF)'],
                           ['docx', 'Word (.docx)'],
                           ['html', 'HTML page'],
                           ['md', 'Markdown (.md)'],
@@ -170,7 +173,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
                           }}
                         >
                           {label}
-                          {!pro && f !== 'pdf' && <span className="ml-auto text-xs" title="Paid plan">🔒</span>}
+                          {exportFeature(f) && !can(exportFeature(f)!) && <span className="ml-auto text-xs" title="StepCrumb Pro">🔒</span>}
                         </button>
                       ))}
                     </>

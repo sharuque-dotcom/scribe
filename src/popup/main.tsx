@@ -5,6 +5,7 @@ import { listGuides } from '../shared/db'
 import type { CaptureMode, Guide, RecorderState } from '../shared/types'
 import { Icon, timeAgo } from '../editor/ui'
 import { usePlan } from '../editor/usePlan'
+import { LICENSE_CONFIG } from '../shared/license'
 
 const send = <T,>(msg: object) => chrome.runtime.sendMessage(msg) as Promise<T>
 const MODES: { id: CaptureMode; label: string; hint: string }[] = [
@@ -22,7 +23,7 @@ function Popup() {
   const [busy, setBusy] = useState(false)
   const [canCapture, setCanCapture] = useState(true)
   const [mode, setMode] = useState<CaptureMode>('screenshots')
-  const { plan } = usePlan()
+  const { plan, pro, ready, lapsed } = usePlan()
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
@@ -127,6 +128,20 @@ function Popup() {
                 ? 'Chrome will ask what to share: a tab, a window or your entire screen. Then click through your task. Finish from this popup or press Alt+Shift+R.'
                 : 'Click through your task as usual. Each click becomes a step with a screenshot. Shortcut: Alt+Shift+R.'}
           </p>
+        </div>
+      )}
+
+      {!state.recording && ready && !pro && (
+        <div className="mt-4 rounded-lg border border-line p-3">
+          <p className="mb-2 text-xs text-muted">
+            {lapsed ? 'Your Pro access has ended. Your guides are safe.' : 'Pro: Word, HTML & Markdown, no branding, 1080p video, all voices.'}
+          </p>
+          <button className="btn-primary w-full" onClick={() => void chrome.tabs.create({ url: LICENSE_CONFIG.checkoutUrl })}>
+            Upgrade to Pro
+          </button>
+          <button className="mt-2 w-full text-center text-xs font-medium text-muted hover:text-ink" onClick={() => openEditor('#/license')}>
+            Enter license key
+          </button>
         </div>
       )}
 

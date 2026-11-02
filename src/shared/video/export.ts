@@ -20,12 +20,12 @@ import {
 import { registerAacEncoder } from '@mediabunny/aac-encoder'
 import type { VoiceClip } from '../db'
 import type { GuideVideo, Step } from '../types'
+import { videoLimits } from '../plans'
 import { captionAlpha, drawFrame, layoutFor, outputSize, redactAt } from './compose'
 import { cameraAt, cueAt, rippleAt, trackAt, type VideoPlan } from './timeline'
 
 export const FPS = 30
 // Free plan limit on the finished video's length.
-export const FREE_MAX_MS = 2 * 60 * 1000
 
 export interface ExportResult {
   blob: Blob
@@ -60,20 +60,21 @@ export async function exportVideo(opts: {
   clips: Record<string, VoiceClip>
   onProgress: (fraction: number) => void
   signal?: AbortSignal
-  // Free plan: 720p, watermark, up to 2 minutes.
-  free?: boolean
+  // Plan limits (see src/shared/plans.ts videoLimits). Defaults to the free plan.
+  limits?: { width: number; maxMs?: number; watermark: boolean }
 }): Promise<ExportResult> {
-  const { recording, video, steps, plan, clips, onProgress, signal, free } = opts
+  const { recording, video, steps, plan, clips, onProgress, signal } = opts
+  const limits = opts.limits ?? videoLimits(false)
   const settings = video.settings
-  if (free && plan.map.outDuration > FREE_MAX_MS) {
-    throw new Error('Free exports are up to 2 minutes. Trim the video, or get a license for longer videos.')
+  if (limits.maxMs !== undefined && plan.map.outDuration > limits.maxMs) {
+    throw new Error('Free exports are up to 2 minutes. Trim the video, or upgrade to StepCrumb Pro for longer videos.')
   }
   const input = new Input({ source: new BlobSource(recording), formats: ALL_FORMATS })
   const track = await input.getPrimaryVideoTrack()
   if (!track) throw new Error('The recording has no video in it.')
   const fw = track.displayWidth
   const fh = track.displayHeight
-  const { W, H } = outputSize(fw, fh, settings.background, free ? 1280 : 1920)
+  const { W, H } = outputSize(fw, fh, settings.background, limits.width)
   const layout = layoutFor(W, H, fw, fh, settings.background)
 
   const mp4 = await canEncodeVideo('avc', { width: W, height: H })
@@ -123,7 +124,7 @@ export async function exportVideo(opts: {
         ripple: rippleAt(src, steps),
         caption: cue ? { text: cue.text, alpha: captionAlpha(out, cue.start, cue.end) } : null,
         redact: redactAt(src, video.redact),
-        watermark: free,
+        watermark: limits.watermark,
       })
       await videoSource.add(out / 1000, 1 / FPS)
       i++

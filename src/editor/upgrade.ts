@@ -1,8 +1,11 @@
 import { LICENSE_CONFIG } from '../shared/license'
 import type { ToastData } from './ui'
 
-// Shown when a free user picks a paid feature.
+// Opens Polar's checkout (Lifetime, Monthly or Yearly) in a new tab.
+export const openCheckout = () => window.open(LICENSE_CONFIG.checkoutUrl, '_blank', 'noopener')
+
+// Shown when a free user picks a Pro feature.
 export const lockedToast = (what: string): ToastData => ({
-  text: `${what} is included with a StepCrumb license.`,
-  action: { label: 'Get a license', run: () => window.open(LICENSE_CONFIG.buyUrl, '_blank', 'noopener') },
+  text: `Pro feature: ${what}.`,
+  action: { label: 'Upgrade to Pro', run: openCheckout },
 })

@@ -1,5 +1,6 @@
 // Free voiceover. Generates speech on this computer with the Kokoro model and
 // caches each sentence, so the same text is never generated twice.
+import { FREE_LIMITS } from '../plans'
 import { getVoiceClip, putVoiceClip, type VoiceClip } from '../db'
 
 export const VOICES: { id: string; label: string }[] = [
@@ -12,7 +13,7 @@ export const VOICES: { id: string; label: string }[] = [
 ]
 
 // The voice included in the free plan.
-export const FREE_VOICE = 'af_heart'
+export const FREE_VOICE = FREE_LIMITS.voice
 
 export const clipKey = (voice: string, text: string) => `${voice}|${text.trim()}`
 export const clipMs = (c: VoiceClip) => Math.round((c.samples.length / c.sampleRate) * 1000)

@@ -31,7 +31,11 @@ const ctx = await chromium.launchPersistentContext('', {
   args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
 })
 const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
-const licenseCalls = await fakeLicenseServer(ctx)
+const polar = await fakeLicenseServer(ctx)
+await ctx.route('https://buy.polar.sh/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>Checkout</title>' }))
+// Every request the extension makes (to check that only the license check goes online).
+const requests = []
+ctx.on('request', (r) => requests.push(r.url()))
 const extId = new URL(sw.url()).host
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 const check = (cond, msg) => {
@@ -183,11 +187,11 @@ try {
   await editor.getByRole('button', { name: 'Export' }).click()
   check((await editor.getByRole('button', { name: 'PDF (with StepCrumb footer)' }).count()) === 1, 'free PDF export is labelled as branded')
   await editor.getByRole('button', { name: /HTML page/ }).click()
-  await editor.getByText('HTML export is included with a StepCrumb license.').waitFor()
+  await editor.getByText('Pro feature: HTML export.').waitFor()
   check(true, 'free plan: HTML export is locked')
   await editor.getByRole('button', { name: 'Export' }).click()
   await editor.getByRole('button', { name: /Word \(\.docx\)/ }).click()
-  await editor.getByText('Word export is included with a StepCrumb license.').waitFor()
+  await editor.getByText('Pro feature: Word export.').waitFor()
   check(true, 'free plan: Word export is locked')
   await editor.goto(editor.url() + '/preview')
   const previewFrame = editor.frameLocator('iframe[title="Guide preview"]')
@@ -198,7 +202,8 @@ try {
 
   // ---------- Paid plan ----------
   await activateInSettings(editor, check)
-  check(licenseCalls.some((c) => c.path.endsWith('/activate') && c.key === TEST_KEY), 'activation called the license server')
+  check(polar.calls.some((c) => c.path.endsWith('/activate') && c.body.key === TEST_KEY), 'activation called Polar')
+  check(polar.calls.every((c) => Object.keys(c.body).every((k) => ['key', 'organization_id', 'label', 'activation_id'].includes(k))), 'license calls send only the key, organization and activation')
   const dl = editor.waitForEvent('download')
   await editor.getByRole('button', { name: 'Export' }).click()
   await editor.getByRole('button', { name: 'HTML page' }).click()
@@ -227,11 +232,42 @@ try {
   await pause(1200)
   await editor.screenshot({ path: join(out, '6-library.png') })
 
+  // ---------- Subscription cancelled ----------
+  polar.revoke()
+  const after = await sw.evaluate(() => globalThis.scribe.recheckLicense(true))
+  check(after?.status === 'revoked', 'a re-check after cancellation marks the key revoked')
+  await editor.reload()
+  await editor.getByRole('button', { name: 'Free · Upgrade' }).waitFor()
+  check(true, 'the app drops back to Free')
+  check((await editor.getByText('Create a project in Projectly').count()) >= 1, 'local guides are still there')
+  await editor.getByRole('button', { name: 'Free · Upgrade' }).click()
+  await editor.getByText('Your Pro access has ended').waitFor()
+  check(true, 'explains that Pro ended and guides are safe')
+  await editor.keyboard.press('Escape')
+
+  // Network: only Polar (the license check) and the local test site.
+  const outside = [...new Set(requests.map((u) => new URL(u)).filter((u) => /^https?:$/.test(u.protocol) && u.hostname !== 'localhost').map((u) => u.hostname))]
+  console.log('   hosts contacted:', outside.join(', ') || '(none)')
+  check(outside.every((h) => h === 'api.polar.sh'), 'nothing but the license check goes online')
+
   const popup = await ctx.newPage()
   await popup.setViewportSize({ width: 340, height: 420 })
   await popup.goto(`chrome-extension://${extId}/popup.html`)
-  await pause(800)
+  await popup.getByRole('button', { name: 'Upgrade to Pro' }).waitFor()
+  check((await popup.getByRole('button', { name: 'Enter license key' }).count()) === 1, 'popup offers Upgrade to Pro and Enter license key')
   await popup.screenshot({ path: join(out, '7-popup.png') })
+  const checkout = ctx.waitForEvent('page')
+  await popup.getByRole('button', { name: 'Upgrade to Pro' }).click()
+  const checkoutPage = await checkout
+  await checkoutPage.waitForURL(/buy\.polar\.sh/, { timeout: 10000 }).catch(() => {})
+  console.log('   checkout tab:', checkoutPage.url())
+  check(/^https:\/\/(buy\.polar\.sh\/polar_cl_|polar\.sh\/checkout\/)/.test(checkoutPage.url()), 'Upgrade to Pro opens the Polar checkout')
+  await checkoutPage.close()
+  const licensePage = ctx.waitForEvent('page')
+  await popup.getByRole('button', { name: 'Enter license key' }).click()
+  const lp = await licensePage
+  await lp.getByLabel('License key').waitFor()
+  check(lp.url().endsWith('#/license'), 'Enter license key opens the license screen')
   console.log('\nAll checks passed. Screenshots in', out)
 } finally {
   await ctx.close()

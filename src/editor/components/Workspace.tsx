@@ -13,6 +13,7 @@ import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
 import { SettingsDialog } from './Settings'
 import { PlanBadge } from './PlanBadge'
+import { exportFeature, FEATURES } from '../../shared/plans'
 import { usePlan } from '../usePlan'
 import { lockedToast } from '../upgrade'
 import { guideDocx, toBlob } from '../../shared/docx'
@@ -51,7 +52,8 @@ async function fileToImage(file: File) {
 
 export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const { guide, images, update, addImage } = useGuide(id)
-  const { pro } = usePlan()
+  const { can } = usePlan()
+  const branded = !can('pdfNoBranding')
   const [annotating, setAnnotating] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastData | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -188,11 +190,12 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const exportGuide = async (format: 'pdf' | 'docx' | 'html' | 'md' | 'json') => {
     const name = slug(guide.title)
     if (format === 'json') return download(`${name}.stepcrumb.json`, await guideJson(guide), 'application/json')
-    if (!pro && format !== 'pdf') return setToast(lockedToast(format === 'docx' ? 'Word export' : format === 'md' ? 'Markdown export' : 'HTML export'))
+    const needs = exportFeature(format)
+    if (needs && !can(needs)) return setToast(lockedToast(FEATURES[needs].label))
     const r = await renderAll(guide, images)
     if (format === 'docx') return download(`${name}.docx`, await toBlob(await guideDocx(guide, r)))
     if (format === 'md') return download(`${name}.md`, guideMarkdown(guide, r), 'text/markdown')
-    const html = wrapHtml(guide.title, guideBodyHtml(guide, r), { branded: !pro })
+    const html = wrapHtml(guide.title, guideBodyHtml(guide, r), { branded })
     if (format === 'html') download(`${name}.html`, html, 'text/html')
     else printHtml(html)
   }
@@ -255,7 +258,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
               {(close) =>
                 (
                   [
-                    ['pdf', pro ? 'PDF (print / save as PDF)' : 'PDF (with StepCrumb footer)'],
+                    ['pdf', branded ? 'PDF (with StepCrumb footer)' : 'PDF (print / save as PDF)'],
                     ['docx', 'Word (.docx)'],
                     ['html', 'HTML page'],
                     ['md', 'Markdown (.md)'],
@@ -271,7 +274,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                     }}
                   >
                     {label}
-                    {!pro && (f === 'docx' || f === 'html' || f === 'md') && <span className="ml-auto text-xs" title="Paid plan">🔒</span>}
+                    {exportFeature(f) && !can(exportFeature(f)!) && <span className="ml-auto text-xs" title="StepCrumb Pro">🔒</span>}
                   </button>
                 ))
               }
@@ -420,7 +423,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
       {tab === 'preview' && (
         <div className="mx-auto max-w-4xl px-4 pb-24 pt-6">
           {rendered ? (
-            <iframe title="Guide preview" className="h-[calc(100vh-8rem)] w-full rounded-xl border border-line bg-white shadow-soft" srcDoc={wrapHtml(guide.title, guideBodyHtml(guide, rendered), { branded: !pro })} />
+            <iframe title="Guide preview" className="h-[calc(100vh-8rem)] w-full rounded-xl border border-line bg-white shadow-soft" srcDoc={wrapHtml(guide.title, guideBodyHtml(guide, rendered), { branded })} />
           ) : (
             <p className="text-center text-muted">Rendering…</p>
           )}

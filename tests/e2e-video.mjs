@@ -204,7 +204,7 @@ try {
   const disabledVoices = await editor.locator('select[aria-label="Voice"] option[disabled]').count()
   check(disabledVoices === 5, 'free plan: 1 voice included, 5 locked')
   await editor.getByRole('button', { name: 'Background Dark' }).click()
-  await editor.getByText('More backgrounds is included with a StepCrumb license.').waitFor()
+  await editor.getByText('Pro feature: All video backgrounds.').waitFor()
   check(true, 'free plan: extra backgrounds are locked')
   await editor.locator('canvas[aria-label="Video preview"]').screenshot({ path: join(out, 'v4-free-preview.png') })
 

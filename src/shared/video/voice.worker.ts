@@ -13,6 +13,9 @@ function load(wasmBase: string) {
     const onnx = env.backends.onnx as { wasm?: { wasmPaths?: string; numThreads?: number } }
     onnx.wasm = { ...(onnx.wasm ?? {}), wasmPaths: wasmBase, numThreads: 1 }
     const files: Record<string, { loaded: number; total: number }> = {}
+    // PRIVACY: the one network request besides the license check. It only
+    // downloads the public model files (GET from Hugging Face); no text, steps
+    // or anything captured is sent. Speech is generated on this computer.
     model = KokoroTTS.from_pretrained(MODEL, {
       dtype: 'q8',
       device: 'wasm',

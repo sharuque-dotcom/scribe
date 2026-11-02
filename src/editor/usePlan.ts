@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import { isPro, loadLicense, needsRecheck, onLicenseChange, planName, revalidateLicense, type License } from '../shared/license'
+import { isPro, loadLicense, onLicenseChange, planName, recheckLicense, type License } from '../shared/license'
+import { can as canFor, type Feature } from '../shared/plans'
 
-// Whether this browser has a paid plan. Re-checks the key in the background
-// every few days and updates when it's activated in another tab.
+// The current plan. Re-checks the key if a day has passed (the background also
+// does this on browser start and daily) and updates when it changes elsewhere.
 export function usePlan() {
   const [license, setLicense] = useState<License | null>(null)
   const [ready, setReady] = useState(false)
   useEffect(() => {
     let live = true
     const load = async () => {
-      let l = await loadLicense()
-      if (l && needsRecheck(l)) l = await revalidateLicense(l)
+      const l = await recheckLicense()
       if (live) {
         setLicense(l)
         setReady(true)
@@ -23,5 +23,15 @@ export function usePlan() {
       off()
     }
   }, [])
-  return { license, pro: isPro(license), ready, plan: isPro(license) ? planName(license) : 'Free' }
+  const pro = isPro(license)
+  return {
+    license,
+    pro,
+    ready,
+    plan: planName(license),
+    // Free vs Pro decisions all go through here (see src/shared/plans.ts).
+    can: (feature: Feature) => canFor(feature, pro),
+    // Had Pro before, and Polar no longer accepts the key (cancelled or lapsed).
+    lapsed: !!license && !pro,
+  }
 }

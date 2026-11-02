@@ -1,7 +1,7 @@
 // Edit these before launch.
 export const CONFIG = {
-  // Lemon Squeezy checkout link for the Founding 1,000 product (opens as an overlay).
-  checkoutUrl: 'https://stepcrumb.lemonsqueezy.com/checkout/buy/REPLACE-ME',
+  // Polar checkout: Lifetime, Monthly and Yearly on one page.
+  checkoutUrl: 'https://buy.polar.sh/polar_cl_ImqGIEAjftim5l45evDJ9hyB5WhthHn6747Pn1IkbMt',
   // Chrome Web Store / Edge Add-ons listing (until published, point to a waitlist or the zip).
   chromeStoreUrl: '#install',
   edgeStoreUrl: '#install',

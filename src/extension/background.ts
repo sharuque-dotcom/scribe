@@ -1,6 +1,7 @@
 // Extension service worker: owns recording state, takes screenshots,
 // and writes steps into IndexedDB as they arrive.
 import { describeEvent, shouldMerge } from '../shared/describe'
+import { recheckLicense } from '../shared/license'
 import { pixelateRects } from '../shared/redact'
 import { deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
 import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
@@ -542,7 +543,25 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   if (tab.url && /^https?:/.test(tab.url)) await ensureContentScript(tabId)
 })
 
-chrome.runtime.onInstalled.addListener(() => setState(IDLE))
+chrome.runtime.onInstalled.addListener(() => {
+  void setState(IDLE)
+  scheduleLicenseCheck()
+})
+
+// ---------- license ----------
+// Re-check the Pro license on browser start and once a day. A cancelled or
+// lapsed key drops to Free (see src/shared/license.ts); local content is untouched.
+const LICENSE_ALARM = 'license-check'
+function scheduleLicenseCheck() {
+  chrome.alarms.create(LICENSE_ALARM, { delayInMinutes: 1, periodInMinutes: 24 * 60 })
+}
+chrome.runtime.onStartup.addListener(() => {
+  scheduleLicenseCheck()
+  void recheckLicense(true)
+})
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === LICENSE_ALARM) void recheckLicense()
+})
 
 // Closing the recorder window ends a window/screen recording (the guide is kept).
 chrome.windows.onRemoved.addListener(async (windowId) => {
@@ -551,4 +570,4 @@ chrome.windows.onRemoved.addListener(async (windowId) => {
 })
 
 // Exposed for automated tests.
-Object.assign(globalThis, { scribe: { start, stop, togglePause, getState } })
+Object.assign(globalThis, { scribe: { start, stop, togglePause, getState, recheckLicense } })
