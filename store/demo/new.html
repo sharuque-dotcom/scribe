@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><title>New customer · Acme Billing</title><link rel="stylesheet" href="style.css"></head><body><div class="app"><nav class="side"><div class="brand"><i></i>Acme Billing</div><a href="#">Dashboard</a><a class="on" href="customers.html">Customers</a><a href="#">Invoices</a><a href="#">Plans</a><a href="#">Reports</a><a href="#">Settings</a></nav>
+<main><h1>New customer</h1><p class="sub">Add their details and payment method.</p>
+<form class="card" action="customers.html" onsubmit="event.preventDefault();location.href='customers.html?added='+encodeURIComponent(document.getElementById('name').value)">
+<div class="row"><div><label for="name">Full name</label><input id="name"></div><div><label for="email">Work email</label><input id="email" type="email"></div></div>
+<label for="company">Company</label><input id="company">
+<label for="plan">Plan</label><select id="plan"><option>Choose a plan</option><option>Starter · monthly</option><option>Business · monthly</option><option>Business · yearly</option></select>
+<label for="card">Card number</label><input id="card" autocomplete="cc-number" inputmode="numeric">
+<div style="margin-top:20px"><button id="create" class="btn" type="submit">Create customer</button></div>
+</form></main></div></body></html>

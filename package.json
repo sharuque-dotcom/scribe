@@ -1,7 +1,7 @@
 {
   "name": "stepcrumb",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Click through any website, capture annotated screenshots, and turn them into SOPs and training material.",
   "scripts": {

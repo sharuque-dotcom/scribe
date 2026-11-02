@@ -1,0 +1,9 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Customers · Acme Billing</title><link rel="stylesheet" href="style.css"></head><body><div class="app"><nav class="side"><div class="brand"><i></i>Acme Billing</div><a href="#">Dashboard</a><a class="on" href="customers.html">Customers</a><a href="#">Invoices</a><a href="#">Plans</a><a href="#">Reports</a><a href="#">Settings</a></nav>
+<main><div class="top"><div><h1>Customers</h1><p class="sub" style="margin:0">Everyone you bill, in one place.</p></div><a id="new" class="btn" href="new.html">+ New customer</a></div>
+<table><thead><tr><th>Name</th><th>Company</th><th>Plan</th><th>Status</th></tr></thead><tbody id="rows">
+<tr><td>Priya Raman</td><td>Lumen Health</td><td>Business · yearly</td><td><span class="pill">Active</span></td></tr>
+<tr><td>Marcus Webb</td><td>Harbor &amp; Co</td><td>Starter · monthly</td><td><span class="pill">Active</span></td></tr>
+<tr><td>Elena Rossi</td><td>Studio Verde</td><td>Business · monthly</td><td><span class="pill">Active</span></td></tr>
+</tbody></table></main></div>
+<script>const n=new URLSearchParams(location.search).get('added');if(n){const r=document.createElement('tr');r.innerHTML='<td><b>'+n+'</b></td><td>Bluebird Studio</td><td>Business · yearly</td><td><span class="pill">Active</span></td>';document.getElementById('rows').prepend(r);const t=document.createElement('div');t.className='toast';t.textContent='✓ Customer created';document.body.append(t)}</script>
+</body></html>
