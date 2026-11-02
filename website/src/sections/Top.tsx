@@ -16,9 +16,31 @@ export function Logo({ className = '' }: { className?: string }) {
   )
 }
 
-export const ChromeIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M12 4v11M7 10l5 5 5-5M5 20h14" />
+// The Chrome logo: three segments, each bounded by a line tangent to the inner circle.
+const CHROME_SEGMENTS = (() => {
+  const c = 24, R = 22, r = 10, d = Math.sqrt(R * R - r * r)
+  const rad = (deg: number) => (deg * Math.PI) / 180
+  const pts = [0, 1, 2].map((k) => {
+    const a = rad(-90 + 120 * k)
+    const dir = rad(120 * k)
+    const t = [c + r * Math.cos(a), c + r * Math.sin(a)]
+    return { t, p: [t[0] + d * Math.cos(dir), t[1] + d * Math.sin(dir)] }
+  })
+  const f = (n: number) => n.toFixed(2)
+  return ['#EA4335', '#FBBC04', '#34A853'].map((fill, k) => {
+    const a = pts[k]
+    const b = pts[(k + 2) % 3]
+    return { fill, d: `M${f(a.t[0])} ${f(a.t[1])}L${f(a.p[0])} ${f(a.p[1])}A${R} ${R} 0 0 0 ${f(b.p[0])} ${f(b.p[1])}L${f(b.t[0])} ${f(b.t[1])}A${r} ${r} 0 0 1 ${f(a.t[0])} ${f(a.t[1])}Z` }
+  })
+})()
+
+export const ChromeIcon = ({ className = 'h-5 w-5' }: { className?: string }) => (
+  <svg viewBox="0 0 48 48" className={`flex-none ${className}`} aria-hidden>
+    {CHROME_SEGMENTS.map((s) => (
+      <path key={s.fill} d={s.d} fill={s.fill} />
+    ))}
+    <circle cx="24" cy="24" r="10" fill="#fff" />
+    <circle cx="24" cy="24" r="8" fill="#1A73E8" />
   </svg>
 )
 
@@ -45,8 +67,8 @@ export function Nav() {
           <a href="#pricing" className="hidden rounded-full border border-ink/80 px-4 py-2 text-sm font-semibold hover:bg-ink hover:text-paper sm:inline-flex">
             Lifetime · ${CONFIG.founding.price}
           </a>
-          <a href={CONFIG.chromeStoreUrl} className="inline-flex rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper hover:opacity-90">
-            Add to Chrome
+          <a href={CONFIG.chromeStoreUrl} className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper hover:opacity-90">
+            <ChromeIcon className="h-4 w-4" /> Add to Chrome
           </a>
         </div>
       </nav>
