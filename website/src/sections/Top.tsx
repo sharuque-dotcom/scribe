@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { openCheckout } from '../checkout'
 import { CONFIG } from '../config'
 import { HeroDemo } from './HeroDemo'
 
@@ -99,7 +98,7 @@ export function Hero() {
           <a href={CONFIG.chromeStoreUrl} className="btn-dark px-7 py-3.5 text-[16px]">
             <ChromeIcon /> Add to Chrome, it's free
           </a>
-          <a href={CONFIG.checkoutUrl} onClick={openCheckout} className="btn-ghost px-7 py-3.5 text-[16px]">
+          <a href={CONFIG.checkoutUrl} className="btn-ghost px-7 py-3.5 text-[16px]">
             Lifetime access · ${CONFIG.founding.price}
           </a>
         </div>
