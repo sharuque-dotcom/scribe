@@ -4,3 +4,6 @@ dist
 .DS_Store
 *.tsbuildinfo
 tests/output
+
+# /brag launch video renders
+brag-output*/
