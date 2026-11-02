@@ -117,3 +117,14 @@ describe('subtitle files', () => {
     expect(toSrt(cues)).toBe('1\n00:00:01,000 --> 00:00:03,500\nClick Save\n\n2\n01:02:05,002 --> 01:02:06,000\nDone\n')
   })
 })
+
+describe('window and screen recordings', () => {
+  it('zooms and ripples at the video position, not the page position', () => {
+    const s = step('a', 2000, { click: { x: 0.9, y: 0.9 }, vClick: { x: 0.3, y: 0.4 }, vRect: { x: 0.25, y: 0.38, w: 0.1, h: 0.04 } })
+    const p = planVideo({ duration: 6000, source: 'screen', cursor: [], trimStart: 0, settings: { zoomScale: 2 } }, [s])
+    expect(p.zooms).toHaveLength(1)
+    const cam = cameraAt(2000, p.tracks, p.zooms)
+    expect(cam.x).toBeLessThan(0.5)
+    expect(p.tracks.hasCursor).toBe(false)
+  })
+})

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>StepCrumb recorder</title>
+    <style>
+      body { margin: 0; font: 14px/1.5 Inter, -apple-system, 'Segoe UI', Roboto, sans-serif; background: #111827; color: #fff; display: grid; place-items: center; height: 100vh; }
+      main { padding: 20px; text-align: center; }
+      .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #ef4444; margin-right: 8px; animation: p 1.4s infinite; }
+      @keyframes p { 50% { opacity: .35; } }
+      button { margin-top: 14px; border: 0; border-radius: 999px; padding: 8px 18px; background: #ef4444; color: #fff; font-weight: 600; cursor: pointer; }
+      p { color: #cbd5e1; margin: 8px 0 0; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <strong><span class="dot"></span>StepCrumb</strong>
+      <p id="status">Starting…</p>
+      <button id="stop" type="button">Finish</button>
+    </main>
+    <script src="recorder.js"></script>
+  </body>
+</html>

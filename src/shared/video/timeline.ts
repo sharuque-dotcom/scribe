@@ -2,7 +2,7 @@
 // points, the smooth cursor, captions, and short freezes so narration can finish.
 // Times are milliseconds. "Source" time is the raw recording; "output" time is
 // the exported video after trimming and freezes.
-import { focusRect } from '../zoom'
+import { focusRect, union } from '../zoom'
 import type { CursorSample, Step, ZoomSegment } from '../types'
 
 export const ZOOM_IN_MS = 700
@@ -24,13 +24,28 @@ export const easeInOut = (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(
 
 const isTimedStep = (s: Step): s is Step & { time: number } => s.kind === 'step' && typeof s.time === 'number'
 
+// Where a step is in the video frame. Window/screen recordings store separate
+// video positions; tab recordings use the page positions directly.
+export function videoFocus(s: Step): { x: number; y: number; w: number; h: number } | null {
+  if (s.vRect) {
+    const r = s.vLabel ? union(s.vRect, s.vLabel) : s.vRect
+    return r.w > 0 && r.h > 0 ? r : null
+  }
+  return focusRect(s)
+}
+
+export function videoClick(s: Step): { x: number; y: number } | null {
+  const r = s.vRect ?? s.targetRect
+  return s.vClick ?? (s.vRect ? null : s.click) ?? (r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null)
+}
+
 // ---------- zooms ----------
 
 export function autoZooms(steps: Step[], duration: number, scale: number): ZoomSegment[] {
   const clicks = steps
     .filter(isTimedStep)
     .filter((s) => {
-      const f = focusRect(s)
+      const f = videoFocus(s)
       return f && f.w <= 0.5 && f.h <= 0.5
     })
     .sort((a, b) => a.time - b.time)
@@ -106,7 +121,7 @@ export function buildTracks(cursor: CursorSample[], steps: Step[], duration: num
   const clicks: CursorSample[] = steps
     .filter(isTimedStep)
     .flatMap((s) => {
-      const p = s.click ?? (s.targetRect ? { x: s.targetRect.x + s.targetRect.w / 2, y: s.targetRect.y + s.targetRect.h / 2 } : null)
+      const p = videoClick(s)
       return p ? [{ t: s.time, x: p.x, y: p.y }] : []
     })
   const samples = [...cursor, ...clicks].sort((a, b) => a.t - b.t)
@@ -168,9 +183,11 @@ export function cameraAt(t: number, tracks: Tracks, zooms: ZoomSegment[]): Camer
 // A ripple that grows from each click for a moment.
 export function rippleAt(t: number, steps: Step[]): { x: number; y: number; age: number } | null {
   for (const s of steps) {
-    if (!isTimedStep(s) || !s.click || (s.action !== 'click' && s.action !== 'type' && s.action !== 'select')) continue
+    if (!isTimedStep(s) || (s.action !== 'click' && s.action !== 'type' && s.action !== 'select')) continue
+    const p = s.vClick ?? (s.vRect ? null : s.click)
+    if (!p) continue
     const age = t - s.time
-    if (age >= 0 && age < 600) return { ...s.click, age: age / 600 }
+    if (age >= 0 && age < 600) return { ...p, age: age / 600 }
   }
   return null
 }
@@ -295,7 +312,7 @@ export interface VideoPlan {
 }
 
 export function planVideo(
-  video: { duration: number; cursor: CursorSample[]; zooms?: ZoomSegment[]; trimStart: number; trimEnd?: number; settings: { zoomScale: number } },
+  video: { duration: number; source?: string; cursor: CursorSample[]; zooms?: ZoomSegment[]; trimStart: number; trimEnd?: number; settings: { zoomScale: number } },
   steps: Step[],
   voiceMs: Record<string, number> = {},
 ): VideoPlan {
@@ -304,6 +321,8 @@ export function planVideo(
   const trimEnd = clamp(video.trimEnd ?? duration, trimStart, duration)
   const zooms = video.zooms ?? autoZooms(steps, duration, video.settings.zoomScale)
   const tracks = buildTracks(video.cursor, steps, duration)
+  // Window/screen recordings already contain the real mouse pointer.
+  if (video.source && video.source !== 'tab') tracks.hasCursor = false
   const captions = buildCaptions(steps, duration).filter((c) => c.end > trimStart && c.start < trimEnd && c.text)
   const holds = buildHolds(captions, voiceMs, duration)
   const map = timeMap(holds, trimStart, trimEnd)

@@ -1,5 +1,6 @@
 // Runs in every page. While recording, it turns clicks, typing, dropdown
 // choices and Enter presses into captured steps, and shows a small control bar.
+import { estimateOrigin, monitorOffset, toVideoPoint, toVideoRect, type ScreenGeom } from '../shared/coords'
 import { cleanLabel, looksSensitive } from '../shared/describe'
 import type { CapturedEvent, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
 
@@ -44,6 +45,32 @@ function init() {
 
   const active = () => state.recording && !state.paused
 
+  // ---------- positions in the video (window / entire-screen recordings) ----------
+  // Mouse events say exactly where the page sits on screen; until one arrives,
+  // estimate it from the window size.
+  let origin: { x: number; y: number } | null = null
+  const noteOrigin = (e: MouseEvent) => (origin = { x: e.screenX - e.clientX, y: e.screenY - e.clientY })
+  const geom = (): ScreenGeom => {
+    const s = screen as Screen & { availLeft?: number; availTop?: number }
+    return { winX: screenX, winY: screenY, winW: outerWidth, winH: outerHeight, scrX: monitorOffset(s.availLeft, s.width), scrY: monitorOffset(s.availTop, s.height), scrW: s.width, scrH: s.height }
+  }
+  const desktop = () => (state.rec && state.rec.source !== 'tab' ? state.rec.source : null)
+  const pageOrigin = () => origin ?? estimateOrigin(geom(), innerWidth, innerHeight)
+  // A point given in page pixels → position in the video frame.
+  const vPoint = (cx: number, cy: number) => {
+    const src = desktop()
+    if (!src) return undefined
+    const o = pageOrigin()
+    return toVideoPoint(src, o.x + cx, o.y + cy, geom())
+  }
+  // A rectangle given as 0..1 of the page → position in the video frame.
+  const vRectFromPage = (r: NRect | undefined) => {
+    const src = desktop()
+    if (!src || !r) return undefined
+    const o = pageOrigin()
+    return toVideoRect(src, o.x + r.x * innerWidth, o.y + r.y * innerHeight, o.x + (r.x + r.w) * innerWidth, o.y + (r.y + r.h) * innerHeight, geom())
+  }
+
   // While video is recording, send the mouse path (about 30 positions a second)
   // and where secret fields are, so the video can show a smooth cursor and blur them.
   let samples: { t: number; x: number; y: number }[] = []
@@ -51,11 +78,13 @@ function init() {
   document.addEventListener(
     'pointermove',
     (e) => {
+      noteOrigin(e)
       if (!active() || !state.video) return
       const now = Date.now()
       if (now - lastSample < 30) return
       lastSample = now
-      samples.push({ t: now, x: e.clientX / innerWidth, y: e.clientY / innerHeight })
+      const v = vPoint(e.clientX, e.clientY)
+      samples.push({ t: now, x: v ? v.x : e.clientX / innerWidth, y: v ? v.y : e.clientY / innerHeight })
     },
     { capture: true, passive: true },
   )
@@ -63,7 +92,8 @@ function init() {
     if (!active() || !state.video) return
     const batch = samples
     samples = []
-    chrome.runtime.sendMessage({ type: 'cursor', samples: batch, rects: sensitiveRects(), at: Date.now() }).catch(() => {})
+    const rects = sensitiveRects().map((r) => vRectFromPage(r) ?? r)
+    chrome.runtime.sendMessage({ type: 'cursor', samples: batch, rects, at: Date.now() }).catch(() => {})
   }, 500)
 
   async function send(event: CapturedEvent) {
@@ -96,6 +126,7 @@ function init() {
   document.addEventListener(
     'pointerdown',
     (e) => {
+      noteOrigin(e)
       if (!active() || !e.isTrusted || e.button !== 0) return
       const path = e.composedPath()
       // Browsers report typed text on blur, which comes after this click.
@@ -182,11 +213,15 @@ function init() {
     const target = describeTarget(el)
     const targetRect = action === 'key' ? undefined : viewportRect(el)
     const labelRect = targetRect ? nearbyLabelRect(el, targetRect) : undefined
+    const click = extra.click
     return {
       action,
       target,
       targetRect,
       labelRect,
+      vClick: click ? vPoint(click.x * innerWidth, click.y * innerHeight) : undefined,
+      vRect: vRectFromPage(targetRect),
+      vLabel: vRectFromPage(labelRect),
       redactRects: sensitiveRects(),
       elementKey: elementKey(el),
       url: location.href,

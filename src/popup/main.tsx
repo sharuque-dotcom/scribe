@@ -2,7 +2,7 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../index.css'
 import { listGuides } from '../shared/db'
-import type { Guide, RecorderState } from '../shared/types'
+import type { Guide, RecordSource, RecorderState } from '../shared/types'
 import { Icon, timeAgo } from '../editor/ui'
 import { usePlan } from '../editor/usePlan'
 
@@ -16,12 +16,16 @@ function Popup() {
   const [busy, setBusy] = useState(false)
   const [canCapture, setCanCapture] = useState(true)
   const [video, setVideo] = useState(true)
+  const [source, setSource] = useState<RecordSource>('tab')
   const { plan } = usePlan()
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
     listGuides().then((g) => setRecent(g.slice(0, 4)))
-    chrome.storage.local.get('recordVideo').then(({ recordVideo }) => setVideo(recordVideo !== false))
+    chrome.storage.local.get(['recordVideo', 'recordSource']).then(({ recordVideo, recordSource }) => {
+      setVideo(recordVideo !== false)
+      if (recordSource === 'window' || recordSource === 'screen') setSource(recordSource)
+    })
     chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => setCanCapture(!!t?.url && /^https?:/.test(t.url)))
     const on = (msg: { type?: string; state?: RecorderState }) => msg?.type === 'state' && msg.state && setState(msg.state)
     chrome.runtime.onMessage.addListener(on)
@@ -29,6 +33,10 @@ function Popup() {
   }, [])
 
   if (!state) return <div className="p-5 text-sm text-muted">Loading…</div>
+
+  // Window and screen recordings can start from any page; steps still come from web pages.
+  const canStart = canCapture || (video && source !== 'tab')
+  const startMsg = { type: 'start', title, video, source: video ? source : 'tab' }
 
   const act = async (msg: object, close = false) => {
     setBusy(true)
@@ -83,7 +91,7 @@ function Popup() {
         </div>
       ) : (
         <div className="space-y-3">
-          <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canCapture && act({ type: 'start', title, video }, true)} />
+          <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canStart && act(startMsg, true)} />
           <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line p-2.5 text-sm">
             <input
               type="checkbox"
@@ -96,14 +104,45 @@ function Popup() {
             />
             <span>
               <span className="block font-medium">Also record video</span>
-              <span className="block text-xs text-muted">Records this tab only, no camera or microphone. Auto-zoom, captions and voiceover are added afterwards.</span>
+              <span className="block text-xs text-muted">No camera or microphone. Auto-zoom, captions and voiceover are added afterwards.</span>
             </span>
           </label>
-          <button className="btn-danger w-full py-2.5" disabled={busy || !canCapture} onClick={() => act({ type: 'start', title, video }, true)}>
+          {video && (
+            <div>
+              <div className="grid grid-cols-3 gap-1 rounded-lg bg-raised p-1" role="radiogroup" aria-label="What to record">
+                {(
+                  [
+                    ['tab', 'This tab'],
+                    ['window', 'A window'],
+                    ['screen', 'Entire screen'],
+                  ] as const
+                ).map(([k, l]) => (
+                  <button
+                    key={k}
+                    role="radio"
+                    aria-checked={source === k}
+                    onClick={() => {
+                      setSource(k)
+                      void chrome.storage.local.set({ recordSource: k })
+                    }}
+                    className={`rounded-md px-2 py-1.5 text-xs font-medium ${source === k ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs text-muted">
+                {source === 'tab'
+                  ? 'Recommended. Best auto-zoom, smooth cursor and captions for every step.'
+                  : `Records ${source === 'window' ? 'the window you choose' : 'your whole screen'}, including desktop apps. Steps, captions and zoom come from clicks in web pages; the rest is plain video.`}
+              </p>
+            </div>
+          )}
+          <button className="btn-danger w-full py-2.5" disabled={busy || !canStart} onClick={() => act(startMsg, true)}>
             <Icon name="record" /> Start capturing
           </button>
           <p className="text-xs text-muted">
-            {canCapture ? `Click through your task as usual. Each click becomes a step with a screenshot. ${video ? 'Finish from this popup or press Alt+Shift+R (there is no on-page bar while recording video).' : 'Shortcut: Alt+Shift+R.'}` : 'Open a website (http or https) to start capturing. Browser pages like chrome:// can’t be captured.'}
+            {canStart ? `Click through your task as usual. Each click becomes a step with a screenshot. ${video ? 'Finish from this popup or press Alt+Shift+R (there is no on-page bar while recording video).' : 'Shortcut: Alt+Shift+R.'}` : 'Open a website (http or https) to start capturing. Browser pages like chrome:// can’t be captured.'}
           </p>
         </div>
       )}

@@ -66,6 +66,12 @@ export interface Step {
   elementKey?: string
   // Milliseconds into the video when this step happened (video recordings only).
   time?: number
+  // Where the click/element/label are in the video frame, when the video is a
+  // window or the whole screen (0..1 of the frame). Unset for tab recordings,
+  // where the page positions above already match the video.
+  vClick?: NPoint
+  vRect?: NRect
+  vLabel?: NRect
   // What the voiceover and video caption say, if different from the step text.
   narration?: string
   createdAt: number
@@ -130,8 +136,12 @@ export interface VideoSettings {
   background: VideoBackground
 }
 
+export type RecordSource = 'tab' | 'window' | 'screen'
+
 export interface GuideVideo {
   blobId: string
+  // What was recorded. Unset means 'tab'.
+  source?: RecordSource
   duration: number
   w: number
   h: number
@@ -182,6 +192,9 @@ export interface CapturedEvent {
   pageTitle: string
   // When it happened (Date.now()), used to place the step in the video.
   t?: number
+  vClick?: NPoint
+  vRect?: NRect
+  vLabel?: NRect
 }
 
 export interface RecorderState {
@@ -198,6 +211,9 @@ export interface RecorderState {
 // Bookkeeping for a video being recorded right now.
 export interface VideoRecording {
   id: string
+  source: RecordSource
+  // The recorder window (window/screen recordings).
+  windowId?: number
   startedAt: number
   // Total time spent paused, so step times line up with the video.
   pausedMs: number

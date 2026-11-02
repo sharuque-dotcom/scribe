@@ -11,7 +11,7 @@
   },
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["tabs", "storage", "scripting", "unlimitedStorage", "tabCapture", "offscreen"],
+  "permissions": ["tabs", "storage", "scripting", "unlimitedStorage", "tabCapture", "offscreen", "desktopCapture"],
   "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
   "host_permissions": ["<all_urls>"],
   "content_scripts": [
