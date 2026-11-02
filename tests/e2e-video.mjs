@@ -65,7 +65,7 @@ try {
   await page.mouse.move(640, 400)
   await pause(400)
   await page.bringToFront()
-  const st = await sw.evaluate(() => globalThis.scribe.start('Create a project (video)', { video: true }))
+  const st = await sw.evaluate(() => globalThis.scribe.start('Create a project (video)', { video: true, source: 'tab' }))
   check(st.recording && st.video, 'recording started with video')
   check((await page.locator('div[style*="2147483647"]').count()) === 0, 'no control bar on the page while recording video')
   await pause(600)

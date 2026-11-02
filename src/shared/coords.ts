@@ -41,3 +41,11 @@ export function estimateOrigin(g: ScreenGeom, innerW: number, innerH: number): N
   const side = Math.max(0, (g.winW - innerW) / 2)
   return { x: g.winX + side, y: g.winY + Math.max(0, g.winH - innerH - side) }
 }
+
+// What was picked in Chrome's share dialog, from the video track's settings
+// (displaySurface) or, failing that, its label ("screen:…", "window:…", "web-contents-media-stream://…").
+export function pickedSource(surface: string | undefined, label: string): RecordSource {
+  if (surface === 'browser' || /^web-contents/.test(label)) return 'tab'
+  if (surface === 'window' || /^window:/.test(label)) return 'window'
+  return 'screen'
+}

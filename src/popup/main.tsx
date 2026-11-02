@@ -2,11 +2,17 @@ import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import '../index.css'
 import { listGuides } from '../shared/db'
-import type { Guide, RecordSource, RecorderState } from '../shared/types'
+import type { CaptureMode, Guide, RecorderState } from '../shared/types'
 import { Icon, timeAgo } from '../editor/ui'
 import { usePlan } from '../editor/usePlan'
 
 const send = <T,>(msg: object) => chrome.runtime.sendMessage(msg) as Promise<T>
+const MODES: { id: CaptureMode; label: string; hint: string }[] = [
+  { id: 'screenshots', label: 'Screenshots', hint: 'A step-by-step guide with a screenshot for every click.' },
+  { id: 'both', label: 'Screenshots + video', hint: 'The guide, plus a video of the same run.' },
+  { id: 'video', label: 'Video only', hint: 'A video with auto-zoom and captions. No screenshots.' },
+]
+
 const openEditor = (hash = '') => chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html${hash}`) })
 
 function Popup() {
@@ -15,16 +21,14 @@ function Popup() {
   const [recent, setRecent] = useState<Guide[]>([])
   const [busy, setBusy] = useState(false)
   const [canCapture, setCanCapture] = useState(true)
-  const [video, setVideo] = useState(true)
-  const [source, setSource] = useState<RecordSource>('tab')
+  const [mode, setMode] = useState<CaptureMode>('screenshots')
   const { plan } = usePlan()
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
     listGuides().then((g) => setRecent(g.slice(0, 4)))
-    chrome.storage.local.get(['recordVideo', 'recordSource']).then(({ recordVideo, recordSource }) => {
-      setVideo(recordVideo !== false)
-      if (recordSource === 'window' || recordSource === 'screen') setSource(recordSource)
+    chrome.storage.local.get('recordMode').then(({ recordMode }) => {
+      if (recordMode === 'screenshots' || recordMode === 'both' || recordMode === 'video') setMode(recordMode)
     })
     chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => setCanCapture(!!t?.url && /^https?:/.test(t.url)))
     const on = (msg: { type?: string; state?: RecorderState }) => msg?.type === 'state' && msg.state && setState(msg.state)
@@ -34,9 +38,10 @@ function Popup() {
 
   if (!state) return <div className="p-5 text-sm text-muted">Loading…</div>
 
-  // Window and screen recordings can start from any page; steps still come from web pages.
-  const canStart = canCapture || (video && source !== 'tab')
-  const startMsg = { type: 'start', title, video, source: video ? source : 'tab' }
+  const video = mode !== 'screenshots'
+  // Video can record a window or the screen from any page; screenshots need a web page.
+  const canStart = canCapture || video
+  const startMsg = { type: 'start', title, mode }
 
   const act = async (msg: object, close = false) => {
     setBusy(true)
@@ -65,8 +70,8 @@ function Popup() {
             <span className={`h-3 w-3 rounded-full ${state.paused ? 'bg-amber-500' : 'animate-pulse bg-rec'}`} />
             <div className="text-sm">
               <p className="font-semibold">
-                {state.paused ? 'Paused' : 'Capturing'}
-                {state.video && <span className="ml-1.5 rounded bg-rec/10 px-1.5 py-0.5 text-[11px] font-semibold text-rec">+ video</span>}
+                {state.paused ? 'Paused' : state.video ? 'Recording' : 'Capturing'}
+                {state.video && mode !== 'video' && <span className="ml-1.5 rounded bg-rec/10 px-1.5 py-0.5 text-[11px] font-semibold text-rec">+ video</span>}
               </p>
               <p className="text-muted">
                 {state.count} step{state.count === 1 ? '' : 's'} so far
@@ -92,57 +97,35 @@ function Popup() {
       ) : (
         <div className="space-y-3">
           <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canStart && act(startMsg, true)} />
-          <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-line p-2.5 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5 accent-indigo-600"
-              checked={video}
-              onChange={(e) => {
-                setVideo(e.target.checked)
-                void chrome.storage.local.set({ recordVideo: e.target.checked })
-              }}
-            />
-            <span>
-              <span className="block font-medium">Also record video</span>
-              <span className="block text-xs text-muted">No camera or microphone. Auto-zoom, captions and voiceover are added afterwards.</span>
-            </span>
-          </label>
-          {video && (
-            <div>
-              <div className="grid grid-cols-3 gap-1 rounded-lg bg-raised p-1" role="radiogroup" aria-label="What to record">
-                {(
-                  [
-                    ['tab', 'This tab'],
-                    ['window', 'A window'],
-                    ['screen', 'Entire screen'],
-                  ] as const
-                ).map(([k, l]) => (
-                  <button
-                    key={k}
-                    role="radio"
-                    aria-checked={source === k}
-                    onClick={() => {
-                      setSource(k)
-                      void chrome.storage.local.set({ recordSource: k })
-                    }}
-                    className={`rounded-md px-2 py-1.5 text-xs font-medium ${source === k ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-              <p className="mt-1.5 text-xs text-muted">
-                {source === 'tab'
-                  ? 'Recommended. Best auto-zoom, smooth cursor and captions for every step.'
-                  : `Records ${source === 'window' ? 'the window you choose' : 'your whole screen'}, including desktop apps. Steps, captions and zoom come from clicks in web pages; the rest is plain video.`}
-              </p>
-            </div>
-          )}
+          <div className="space-y-1.5" role="radiogroup" aria-label="What to make">
+            {MODES.map((m) => (
+              <button
+                key={m.id}
+                role="radio"
+                aria-checked={mode === m.id}
+                onClick={() => {
+                  setMode(m.id)
+                  void chrome.storage.local.set({ recordMode: m.id })
+                }}
+                className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left text-sm ${mode === m.id ? 'border-accent bg-accent/5' : 'border-line hover:bg-raised'}`}
+              >
+                <span className={`mt-0.5 grid h-4 w-4 flex-none place-items-center rounded-full border ${mode === m.id ? 'border-accent' : 'border-line'}`}>{mode === m.id && <span className="h-2 w-2 rounded-full bg-accent" />}</span>
+                <span>
+                  <span className="block font-medium">{m.label}</span>
+                  <span className="block text-xs text-muted">{m.hint}</span>
+                </span>
+              </button>
+            ))}
+          </div>
           <button className="btn-danger w-full py-2.5" disabled={busy || !canStart} onClick={() => act(startMsg, true)}>
-            <Icon name="record" /> Start capturing
+            <Icon name="record" /> {video ? 'Start recording' : 'Start capturing'}
           </button>
           <p className="text-xs text-muted">
-            {canStart ? `Click through your task as usual. Each click becomes a step with a screenshot. ${video ? 'Finish from this popup or press Alt+Shift+R (there is no on-page bar while recording video).' : 'Shortcut: Alt+Shift+R.'}` : 'Open a website (http or https) to start capturing. Browser pages like chrome:// can’t be captured.'}
+            {!canStart
+              ? 'Open a website (http or https) to capture screenshots. Browser pages like chrome:// can’t be captured.'
+              : video
+                ? 'Chrome will ask what to share: a tab, a window or your entire screen. Then click through your task. Finish from this popup or press Alt+Shift+R.'
+                : 'Click through your task as usual. Each click becomes a step with a screenshot. Shortcut: Alt+Shift+R.'}
           </p>
         </div>
       )}

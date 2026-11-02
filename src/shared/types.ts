@@ -101,6 +101,8 @@ export interface Guide {
   zoomInset?: boolean
   // A screen recording made alongside the steps, if video was on.
   video?: GuideVideo
+  // 'video' means video only: steps carry caption text and timing but no screenshots.
+  mode?: CaptureMode
 }
 
 // ---------- video ----------
@@ -137,6 +139,8 @@ export interface VideoSettings {
 }
 
 export type RecordSource = 'tab' | 'window' | 'screen'
+// What a capture makes: a screenshot guide, a guide plus video, or only a video.
+export type CaptureMode = 'screenshots' | 'both' | 'video'
 
 export interface GuideVideo {
   blobId: string

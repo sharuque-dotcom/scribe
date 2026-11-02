@@ -117,7 +117,7 @@ export function Library() {
             const n = g.steps.filter((s) => s.kind === 'step').length
             return (
               <div key={g.id} className="card group relative overflow-hidden">
-                <a href={`#/guide/${g.id}`} className="block">
+                <a href={`#/guide/${g.id}${g.mode === 'video' && g.video ? '/video' : ''}`} className="block">
                   <div className="aspect-[16/9] overflow-hidden border-b border-line bg-raised">
                     {thumbs[g.id] ? <img src={thumbs[g.id]} alt="" className="h-full w-full object-cover object-top" /> : <div className="grid h-full place-items-center text-muted"><Icon name="image" className="h-8 w-8" /></div>}
                   </div>
@@ -125,7 +125,7 @@ export function Library() {
                     <p className="line-clamp-2 font-semibold">{g.title}</p>
                     <p className="mt-1 flex items-center gap-2 text-xs text-muted">
                       {g.status === 'recording' && <span className="rounded bg-rec/10 px-1.5 py-0.5 font-semibold text-rec">Capturing</span>}
-                      {n} step{n === 1 ? '' : 's'} · {timeAgo(g.updatedAt)}
+                      {g.mode === 'video' ? 'Video' : `${n} step${n === 1 ? '' : 's'}`} · {timeAgo(g.updatedAt)}
                       {g.docs.sop && <span className="rounded bg-raised px-1.5 py-0.5">SOP</span>}
                       {g.docs.training && <span className="rounded bg-raised px-1.5 py-0.5">Training</span>}
                     </p>

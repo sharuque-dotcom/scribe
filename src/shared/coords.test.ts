@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { estimateOrigin, monitorOffset, toVideoPoint, toVideoRect, type ScreenGeom } from './coords'
+import { estimateOrigin, monitorOffset, pickedSource, toVideoPoint, toVideoRect, type ScreenGeom } from './coords'
 
 const g: ScreenGeom = { winX: 100, winY: 50, winW: 1200, winH: 800, scrX: 0, scrY: 0, scrW: 1600, scrH: 1000 }
 
@@ -37,5 +37,16 @@ describe('estimateOrigin', () => {
   it('puts the page below the toolbar, inside the borders', () => {
     // 1200x800 window with a 1192x700 page: 4px side borders, toolbar on top.
     expect(estimateOrigin(g, 1192, 700)).toEqual({ x: 104, y: 146 })
+  })
+})
+
+describe('pickedSource', () => {
+  it('reads the display surface, then the track label', () => {
+    expect(pickedSource('browser', '')).toBe('tab')
+    expect(pickedSource('window', '')).toBe('window')
+    expect(pickedSource('monitor', '')).toBe('screen')
+    expect(pickedSource(undefined, 'web-contents-media-stream://12:3')).toBe('tab')
+    expect(pickedSource(undefined, 'window:1234:0')).toBe('window')
+    expect(pickedSource(undefined, 'screen:0:0')).toBe('screen')
   })
 })

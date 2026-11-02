@@ -17,7 +17,7 @@ It's a Chrome/Edge extension with a built-in editor. Everything is stored in you
 
 Clicking a field and then typing becomes one step, not two. A small bar on the page lets you pause or finish, and it never shows up in the screenshots.
 
-**Video.** Turn on *Also record video* in the popup and the same click-through also records the tab, with no camera and no microphone. The **Video** tab then gives you:
+**Video.** Choose *Screenshots + video* or *Video only* in the popup and the click-through is also recorded as video, with no camera and no microphone. The **Video** tab then gives you:
 
 - auto-zoom in on each click, panning across a page and zooming back out when the page changes
 - a smooth, larger cursor and a click ripple (tab recordings have no cursor, so it's drawn from the recorded mouse path)
@@ -27,13 +27,13 @@ Clicking a field and then typing becomes one step, not two. A small bar on the p
 - a timeline where you drag, resize, add and delete zooms and trim the start and end
 - export at 1080p/30 fps with captions and voice built in, plus `.srt`/`.vtt` subtitle files. Chrome on Windows and Mac saves MP4 (H.264 + AAC); browsers without an H.264 encoder save WebM.
 
-**What to record.** The popup asks what the video should show, like Chrome's own share dialog:
+**Screenshots, video or both.** The popup asks what to make before you start:
 
-- **This tab**: just the page you're on. The cursor is redrawn smoothly from the mouse path.
-- **A window**: one window, such as the whole browser with its tabs and address bar, or a desktop app.
-- **Entire screen**: everything on one monitor.
+- **Screenshots**: the step-by-step guide.
+- **Screenshots + video**: the guide, plus a video of the same run.
+- **Video only**: a video with auto-zoom and captions. Each click is still recorded as a step (it becomes a caption and a zoom), but no screenshots are taken, and the editor opens on the Video tab.
 
-For a window or screen, Chrome's picker opens in a small StepCrumb window, which then minimizes itself while you work. Window and screen recordings already contain the real cursor, so no extra cursor is drawn; zooms and click ripples still follow your clicks in the browser. Closing the StepCrumb recorder window, or Chrome's "Stop sharing" bar, finishes the recording. On a Mac, Chrome needs **Screen Recording** permission (System Settings → Privacy & Security) the first time.
+For video, Chrome's own share dialog then asks what to record: a tab, a window (for example the whole browser, or a desktop app) or the entire screen. It opens from a small StepCrumb window, which minimizes itself once recording starts. Tab recordings get a smooth drawn cursor; window and screen recordings already show the real one. Zooms and click ripples follow your clicks in the browser either way. Closing the StepCrumb window or pressing Chrome's "Stop sharing" also finishes. On a Mac, Chrome needs **Screen Recording** permission (System Settings → Privacy & Security) the first time.
 
 While recording video there's no control bar on the page (it would end up in the video). Finish from the popup or with `Alt+Shift+R`.
 
@@ -93,7 +93,7 @@ Then in Chrome or Edge:
 ## Use
 
 1. Open the website you want to document.
-2. Click the extension icon and press **Start capturing**. The shortcut is `Alt+Shift+R`.
+2. Click the extension icon and choose Screenshots, Screenshots + video or Video only, and press **Start**. The shortcut is `Alt+Shift+R`.
 3. Do the task. Pause from the page bar if you need to do something you don't want recorded.
 4. Press **Finish**. The editor opens with your guide.
 
@@ -109,7 +109,7 @@ src/
     content.ts      watches clicks, typing, dropdowns, Enter and mouse movement on each page; shows the capture bar
     background.ts   takes screenshots, writes steps, starts/stops video, tracks recording state
     offscreen.ts    records the tab to WebM (service workers can't use MediaRecorder)
-    recorder.ts     small window that shows Chrome's window/screen picker and records the chosen source
+    recorder.ts     small window that shows Chrome's share dialog and records what was picked
     recorder-core.ts  shared MediaRecorder start/pause/stop and saving
   shared/
     describe.ts     turns an interaction into instruction text; detects secret fields; merges click+type
@@ -148,7 +148,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 - **`tests/e2e.mjs`** captures a sign-in plus project-creation flow on a local test site. It checks the step text, merging, password redaction and screenshots, then exercises the annotator, the SOP and training templates, and HTML export.
 - Both browser tests run each flow twice, on the free plan and after activating a key against a fake Lemon Squeezy server (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
-- **`tests/e2e-screen.mjs`** records the entire screen and checks that clicks land at the right spot in the video. It needs a real display and real mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out screen`.
+- **`tests/e2e-screen.mjs`** starts a recording through Chrome's share dialog, picks the entire screen, and checks that it's detected as a screen recording and that clicks land at the right spot in the video. Add `video` as the last argument to test video-only mode. It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out screen [video]`.
 - **`tests/e2e-ai.mjs`** runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
 
 ## Limitations
@@ -157,7 +157,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 - Chrome allows about two screenshots per second. If you click faster than that, a screenshot can show the page slightly after the click.
 - Browser pages (`chrome://`, the Web Store, the PDF viewer) can't be captured.
 - Apps drawn entirely on a canvas, like Figma or Google Sheets cells, produce generic step text ("Click here"). Edit it, or use *Improve steps with Claude*.
-- In tab mode, video records one browser tab; steps in other tabs appear in the guide but not the video. Use *A window* or *Entire screen* to include them.
+- A tab recording shows one browser tab; steps in other tabs appear in the guide but not the video. Pick a window or the entire screen to include them.
 - Steps (and the zooms that follow them) only come from clicks inside the browser. Clicks in desktop apps show in a window/screen video but don't become steps.
 - Click positions in window/screen videos assume the browser window isn't moved during recording. With several monitors, record the one the browser is on.
 - The free voice is generated on the user's computer: a few seconds per sentence, and about 90 MB downloaded the first time.

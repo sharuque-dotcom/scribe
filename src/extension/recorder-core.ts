@@ -20,8 +20,9 @@ export async function startRecording(video: MediaTrackConstraints, onEnded?: () 
   const started = new Promise<number>((r) => (recorder!.onstart = () => r(Date.now())))
   recorder.start(1000)
   const startedAt = await started
-  const s = stream.getVideoTracks()[0].getSettings()
-  return { startedAt, w: s.width ?? 0, h: s.height ?? 0 }
+  const track = stream.getVideoTracks()[0]
+  const s = track.getSettings() as MediaTrackSettings & { displaySurface?: string }
+  return { startedAt, w: s.width ?? 0, h: s.height ?? 0, surface: s.displaySurface, label: track.label }
 }
 
 export function pauseRecording(pause: boolean) {

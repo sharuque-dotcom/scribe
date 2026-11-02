@@ -2,7 +2,7 @@
 // and writes steps into IndexedDB as they arrive.
 import { describeEvent, shouldMerge } from '../shared/describe'
 import { deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
-import type { Annotation, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
+import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
 
 const IDLE: RecorderState = { recording: false, paused: false, count: 0 }
@@ -77,12 +77,15 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
   const guide = await getGuide(state.guideId)
   if (!guide) return
 
-  const { redact, ...shot } = await screenshot(windowId, tabId)
-  const imageId = uid()
-  await putImage({ id: imageId, ...shot })
+  // Video-only captures still record each step (it becomes a caption and a zoom)
+  // but skip the screenshot.
+  const shots = guide.mode !== 'video'
+  const { redact, ...shot } = shots ? await screenshot(windowId, tabId) : { redact: [] as NRect[], dataUrl: '', w: 0, h: 0 }
+  const imageId = shots ? uid() : undefined
+  if (imageId) await putImage({ id: imageId, ...shot })
 
   const now = Date.now()
-  const blurs: Annotation[] = (redact ?? event.redactRects).map((r) => ({
+  const blurs: Annotation[] = (shots ? redact ?? event.redactRects : []).map((r) => ({
     id: uid(),
     type: 'blur',
     x1: r.x,
@@ -182,10 +185,15 @@ interface DesktopReady {
   startedAt?: number
   w?: number
   h?: number
+  // What they picked in Chrome's dialog.
+  source?: RecordSource
 }
 let desktopReady: ((m: DesktopReady) => void) | null = null
 
-async function startDesktopVideo(source: 'window' | 'screen'): Promise<{ id: string; startedAt: number; w: number; h: number; windowId?: number } | null> {
+type Started = { id: string; startedAt: number; w: number; h: number; windowId?: number; source: RecordSource }
+
+// 'pick' lets Chrome's own share dialog offer a tab, a window or the entire screen.
+async function startDesktopVideo(source: 'window' | 'screen' | 'pick'): Promise<Started | null> {
   const ready = new Promise<DesktopReady>((resolve) => {
     desktopReady = resolve
     setTimeout(() => resolve({ cancelled: true }), 5 * 60_000)
@@ -200,11 +208,14 @@ async function startDesktopVideo(source: 'window' | 'screen'): Promise<{ id: str
     return null
   }
   if (winId !== undefined) await chrome.windows.update(winId, { state: 'minimized' }).catch(() => {})
-  return { id: uid(), startedAt: res.startedAt, w: res.w ?? 0, h: res.h ?? 0, windowId: winId }
+  const picked: RecordSource = source === 'pick' ? res.source ?? 'screen' : source
+  return { id: uid(), startedAt: res.startedAt, w: res.w ?? 0, h: res.h ?? 0, windowId: winId, source: picked }
 }
 
+// Recordings made in the recorder window have its windowId; tab recordings
+// started without Chrome's dialog run in the offscreen document.
 async function stopVideo(rec: VideoRecording, videoId: string | null): Promise<number> {
-  if (rec.source !== 'tab') {
+  if (rec.windowId !== undefined) {
     try {
       const res = (await chrome.runtime.sendMessage({ target: 'recorder', type: 'rec-stop', videoId })) as { duration?: number } | undefined
       return res?.duration ?? 0
@@ -264,7 +275,8 @@ async function ensureContentScript(tabId: number) {
   }
 }
 
-async function start(title?: string, opts: { video?: boolean; source?: RecordSource } = {}): Promise<RecorderState> {
+async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean; source?: RecordSource | 'pick' } = {}): Promise<RecorderState> {
+  const mode: CaptureMode = opts.mode ?? (opts.video ? 'both' : 'screenshots')
   const current = await getState()
   if (current.recording) return current
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true })
@@ -278,17 +290,24 @@ async function start(title?: string, opts: { video?: boolean; source?: RecordSou
     status: 'recording',
     steps: [],
     docs: {},
+    mode,
   }
   const web = tab?.id !== undefined && !!tab.url && /^https?:/.test(tab.url)
-  const source: RecordSource = opts.source ?? 'tab'
-  let video: { id: string; startedAt: number; w: number; h: number; windowId?: number } | null = null
-  if (opts.video && source !== 'tab') {
+  const wantVideo = mode !== 'screenshots'
+  const source = opts.source ?? 'pick'
+  let video: Started | null = null
+  if (wantVideo && source !== 'tab') {
     video = await startDesktopVideo(source)
-    // They chose to record a window or the screen and then cancelled the picker.
+    // They cancelled Chrome's share dialog.
     if (!video) return getState()
-  } else if (opts.video && web) video = await startVideo(tab.id!)
+  } else if (wantVideo && web) {
+    const v = await startVideo(tab.id!)
+    video = v && { ...v, source: 'tab' }
+  }
+  // Nothing to make without the video.
+  if (mode === 'video' && !video) return getState()
   if (video) {
-    guide.video = { blobId: video.id, source, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
+    guide.video = { blobId: video.id, source: video.source, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
     cursorBuf = []
     redactBuf = []
   }
@@ -299,7 +318,7 @@ async function start(title?: string, opts: { video?: boolean; source?: RecordSou
     guideId: guide.id,
     count: 0,
     video: !!video,
-    rec: video ? { id: video.id, source, windowId: video.windowId, startedAt: video.startedAt, pausedMs: 0 } : undefined,
+    rec: video ? { id: video.id, source: video.source, windowId: video.windowId, startedAt: video.startedAt, pausedMs: 0 } : undefined,
   }
   await setState(state)
 
@@ -341,7 +360,8 @@ async function stop(openEditor = true): Promise<RecorderState> {
       await putGuide(guide)
     }
     if (openEditor) {
-      await chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html#/guide/${state.guideId}`) })
+      const videoOnly = guide?.mode === 'video' && guide.video
+      await chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html#/guide/${state.guideId}${videoOnly ? '/video' : ''}`) })
     }
   }
   await setState(IDLE)
@@ -365,7 +385,7 @@ async function togglePause(): Promise<RecorderState> {
   const next: RecorderState = { ...s, paused: !s.paused }
   if (s.rec) {
     const now = Date.now()
-    await chrome.runtime.sendMessage({ target: s.rec.source === 'tab' ? 'offscreen' : 'recorder', type: next.paused ? 'rec-pause' : 'rec-resume' }).catch(() => {})
+    await chrome.runtime.sendMessage({ target: s.rec.windowId === undefined ? 'offscreen' : 'recorder', type: next.paused ? 'rec-pause' : 'rec-resume' }).catch(() => {})
     next.rec = next.paused
       ? { ...s.rec, pausedAt: now }
       : { ...s.rec, pausedAt: undefined, pausedMs: s.rec.pausedMs + (s.rec.pausedAt ? now - s.rec.pausedAt : 0) }
@@ -384,7 +404,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'getState':
         return getState()
       case 'start':
-        return start(msg.title, { video: !!msg.video, source: msg.source as RecordSource | undefined })
+        return start(msg.title, { mode: msg.mode as CaptureMode | undefined, video: !!msg.video, source: msg.source as RecordSource | 'pick' | undefined })
       case 'desktop-ready':
         desktopReady?.(msg as DesktopReady)
         return null
@@ -414,8 +434,8 @@ chrome.commands.onCommand.addListener(async (command) => {
   const s = await getState()
   if (s.recording) await stop()
   else {
-    const { recordVideo, recordSource } = await chrome.storage.local.get(['recordVideo', 'recordSource'])
-    await start(undefined, { video: recordVideo !== false, source: (recordSource as RecordSource) ?? 'tab' })
+    const { recordMode } = await chrome.storage.local.get('recordMode')
+    await start(undefined, { mode: (recordMode as CaptureMode) ?? 'both' })
   }
 })
 
