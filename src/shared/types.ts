@@ -193,6 +193,8 @@ export interface CapturedEvent {
   redactRects: NRect[]
   elementKey?: string
   url: string
+  // Which page (document) the event happened on, so its screenshot can be checked.
+  page?: string
   pageTitle: string
   // When it happened (Date.now()), used to place the step in the video.
   t?: number
@@ -207,6 +209,8 @@ export interface RecorderState {
   // Recording the tab as video too. The page shows no control bar then,
   // so it stays out of the video.
   video?: boolean
+  // What this capture makes (screenshots, both, or video only).
+  mode?: CaptureMode
   rec?: VideoRecording
   guideId?: string
   count: number

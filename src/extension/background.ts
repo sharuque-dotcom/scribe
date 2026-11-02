@@ -25,32 +25,41 @@ async function setState(s: RecorderState) {
 
 // ---------- screenshots ----------
 
-// Chrome allows about two captureVisibleTab calls per second.
+// Chrome allows about two captureVisibleTab calls per second, so captures run
+// one at a time through a chain.
 const MIN_GAP_MS = 520
 let lastCapture = 0
+let captureChain: Promise<unknown> = Promise.resolve()
+let capturing = 0
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-// Ask the page to hide the capture bar. A page that is navigating away won't
-// answer, so don't wait long.
-async function hideBar(tabId: number | undefined): Promise<NRect[] | undefined> {
+interface Shot {
+  dataUrl: string
+  w: number
+  h: number
+  redact?: NRect[]
+  // Which page (document) was showing when it was taken, as reported by that page.
+  page?: string
+}
+
+// Ask the page to hide the capture bar and say which page it is. A page that
+// is navigating away won't answer, so don't wait long.
+async function prepare(tabId: number | undefined): Promise<{ redactRects?: NRect[]; page?: string } | undefined> {
   if (tabId === undefined) return undefined
   const reply = await Promise.race([
     chrome.tabs.sendMessage(tabId, { type: 'prepareCapture' }).catch(() => undefined),
     sleep(150).then(() => undefined),
   ])
-  return (reply as { redactRects?: NRect[] } | undefined)?.redactRects
+  return reply as { redactRects?: NRect[]; page?: string } | undefined
 }
 
-async function screenshot(
-  windowId: number,
-  tabId?: number,
-  fallbackRedact: NRect[] = [],
-): Promise<{ dataUrl: string; w: number; h: number; redact?: NRect[] }> {
+async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
   for (let attempt = 0; ; attempt++) {
     const wait = lastCapture + MIN_GAP_MS - Date.now()
     if (wait > 0) await sleep(wait)
-    const redact = await hideBar(tabId)
+    const reply = await prepare(tabId)
+    const redact = reply?.redactRects
     lastCapture = Date.now()
     try {
       const raw = await chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 88 })
@@ -67,11 +76,64 @@ async function screenshot(
         dataUrl = await blobToDataUrl(await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 }))
       }
       bmp.close()
-      return { dataUrl, ...size, redact }
+      return { dataUrl, ...size, redact, page: reply?.page }
     } catch (err) {
       if (attempt >= 3) throw err
     }
   }
+}
+
+// The newest screenshot of each recent page, so a step can use a picture of the
+// page it happened on when the browser has already moved to the next page.
+const pageShots = new Map<string, Shot>()
+function remember(shot: Shot) {
+  if (!shot.page) return
+  pageShots.delete(shot.page)
+  pageShots.set(shot.page, shot)
+  while (pageShots.size > 8) pageShots.delete(pageShots.keys().next().value!)
+}
+
+function capture(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
+  capturing++
+  const shot = captureChain.then(() => screenshot(windowId, tabId, fallbackRedact))
+  captureChain = shot.catch(() => {})
+  return shot.then(
+    (s) => {
+      capturing--
+      remember(s)
+      return s
+    },
+    (err) => {
+      capturing--
+      throw err
+    },
+  )
+}
+
+// Events from the same moment (typing that ends with a click, Enter that
+// submits) share one capture, taken as soon as they arrive.
+const recentShot = new Map<number, { at: number; shot: Promise<Shot> }>()
+async function shotForEvent(windowId: number, tabId: number | undefined, event: CapturedEvent): Promise<Shot> {
+  const key = tabId ?? -1
+  const prev = recentShot.get(key)
+  let pending: Promise<Shot>
+  if (prev && Date.now() - prev.at < 250) pending = prev.shot
+  else {
+    pending = capture(windowId, tabId, event.redactRects)
+    recentShot.set(key, { at: Date.now(), shot: pending })
+  }
+  const shot = await pending
+  // The click already opened another page: use the newest picture of the page
+  // the step happened on instead.
+  if (event.page && shot.page !== event.page) return pageShots.get(event.page) ?? shot
+  return shot
+}
+
+// A spare screenshot while the page is quiet (just loaded, or while typing), so
+// there is always a recent picture of the current page to fall back on.
+function preshot(windowId: number, tabId: number) {
+  if (capturing > 0 || Date.now() - lastCapture < MIN_GAP_MS) return
+  capture(windowId, tabId).catch(() => {})
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -89,7 +151,7 @@ const enqueue = <T>(fn: () => Promise<T>): Promise<T> => {
   return next
 }
 
-async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
+async function addStep(event: CapturedEvent, windowId: number, tabId?: number, pendingShot?: Promise<Shot> | null) {
   const state = await getState()
   if (!state.recording || state.paused || !state.guideId) return
   const guide = await getGuide(state.guideId)
@@ -98,9 +160,10 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
   // Video-only captures still record each step (it becomes a caption and a zoom)
   // but skip the screenshot.
   const shots = guide.mode !== 'video'
-  const { redact, ...shot } = shots ? await screenshot(windowId, tabId, event.redactRects) : { redact: [] as NRect[], dataUrl: '', w: 0, h: 0 }
-  const imageId = shots ? uid() : undefined
-  if (imageId) await putImage({ id: imageId, ...shot })
+  const shot = shots ? await (pendingShot ?? shotForEvent(windowId, tabId, event)) : null
+  const redact = shot?.redact
+  const imageId = shot ? uid() : undefined
+  if (shot && imageId) await putImage({ id: imageId, dataUrl: shot.dataUrl, w: shot.w, h: shot.h })
 
   const now = Date.now()
   const blurs: Annotation[] = (shots ? redact ?? event.redactRects : []).map((r) => ({
@@ -335,6 +398,7 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
     paused: false,
     guideId: guide.id,
     count: 0,
+    mode,
     video: !!video,
     rec: video ? { id: video.id, source: video.source, windowId: video.windowId, startedAt: video.startedAt, pausedMs: 0 } : undefined,
   }
@@ -437,9 +501,21 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return togglePause()
       case 'discard':
         return discard()
-      case 'capture':
+      case 'capture': {
         if (sender.tab?.windowId === undefined) return null
-        return enqueue(() => addStep(msg.event as CapturedEvent, sender.tab!.windowId, sender.tab!.id))
+        const event = msg.event as CapturedEvent
+        // Take the screenshot now, before the click can open another page;
+        // writing the step waits its turn so steps stay in order.
+        const st = await getState()
+        const shot = st.recording && !st.paused && st.mode !== 'video' ? shotForEvent(sender.tab.windowId, sender.tab.id, event) : null
+        shot?.catch(() => {})
+        return enqueue(() => addStep(event, sender.tab!.windowId, sender.tab!.id, shot))
+      }
+      case 'preshot': {
+        const st = await getState()
+        if (st.recording && !st.paused && st.mode !== 'video' && sender.tab?.active && sender.tab.id !== undefined) preshot(sender.tab.windowId, sender.tab.id)
+        return null
+      }
       default:
         return null
     }

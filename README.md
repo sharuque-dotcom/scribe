@@ -143,6 +143,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 
 - **`tests/e2e.mjs`** captures a sign-in plus project-creation flow on a local test site. It checks the step text, merging, password redaction and screenshots, then exercises the annotator, the SOP and training templates, and HTML export.
 - Both browser tests run each flow twice, on the free plan and after activating a key against a fake Lemon Squeezy server (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video.
+- **`tests/e2e-timing.mjs`** types a card number and clicks a button that opens another page straight away, at full speed. It checks that the screenshots show the right page, that the card number is pixelated, and that the control bar never appears in a screenshot.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
 - **`tests/e2e-screen.mjs`** starts a recording through Chrome's share dialog, picks the entire screen, and checks that it's detected as a screen recording and that clicks land at the right spot in the video. Add `video` as the last argument to test video-only mode. It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out screen [video]`.
 - **`tests/e2e-ai.mjs`** (`npm run e2e:ai`, which builds with Claude switched on) runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
@@ -156,7 +157,7 @@ With it on: open **Settings** (the gear icon) and paste an Anthropic API key fro
 ## Limitations
 
 - Only the top-level page is captured. Clicks inside iframes, such as embedded payment forms, aren't recorded.
-- Chrome allows about two screenshots per second. If you click faster than that, a screenshot can show the page slightly after the click.
+- Chrome allows about two screenshots per second. Screenshots are taken the moment you click, and each one is checked against the page the step happened on. If you click faster than that and the next page has already opened, the step uses the latest screenshot of the right page, which can be up to a second older than the click.
 - Browser pages (`chrome://`, the Web Store, the PDF viewer) can't be captured.
 - Apps drawn entirely on a canvas, like Figma or Google Sheets cells, produce generic step text ("Click here"). Edit it by hand.
 - A tab recording shows one browser tab; steps in other tabs appear in the guide but not the video. Pick a window or the entire screen to include them.

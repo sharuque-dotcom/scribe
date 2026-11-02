@@ -21,10 +21,34 @@ function init() {
   const recordedValues = new WeakMap<Element, string>()
 
   const bar = createBar()
+  // Identifies this page (document), so the background can tell whether a
+  // screenshot shows the page an event happened on.
+  const pageId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 
+  // Ask for a spare screenshot of this page when it's quiet: just after it
+  // loads, and every so often while typing. Throttled to one per 700ms.
+  let lastPreshot = 0
+  let preshotTimer = 0
+  const preshot = () => {
+    if (!state.recording || state.paused || state.mode === 'video') return
+    window.clearTimeout(preshotTimer)
+    preshotTimer = window.setTimeout(
+      () => {
+        lastPreshot = Date.now()
+        chrome.runtime.sendMessage({ type: 'preshot' }).catch(() => {})
+      },
+      Math.max(0, lastPreshot + 700 - Date.now()),
+    )
+  }
+
+  let loadedShot = false
   const apply = (s: RecorderState) => {
     state = s
     bar.update(s)
+    if (s.recording && !loadedShot) {
+      loadedShot = true
+      window.setTimeout(preshot, 500)
+    }
   }
 
   chrome.runtime.sendMessage({ type: 'hello' }).then(
@@ -37,8 +61,8 @@ function init() {
       // Hide the bar and reply once a frame without it has been painted.
       // Also report secret fields as they are right now, since the user may
       // have typed since the click.
-      bar.hide()
-      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects() })))
+      bar.hold(800)
+      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), page: pageId })))
       return true
     }
   })
@@ -97,14 +121,14 @@ function init() {
   }, 500)
 
   async function send(event: CapturedEvent) {
-    bar.hide()
+    bar.begin()
     try {
       // Send right away: a click that navigates may unload this page any moment.
       await chrome.runtime.sendMessage({ type: 'capture', event })
     } catch {
       // Extension reloaded or page unloading; nothing to do.
     } finally {
-      bar.show()
+      bar.end()
     }
   }
 
@@ -162,6 +186,8 @@ function init() {
     },
     true,
   )
+
+  document.addEventListener('input', () => active() && preshot(), true)
 
   document.addEventListener(
     'focusout',
@@ -225,6 +251,7 @@ function init() {
       redactRects: sensitiveRects(),
       elementKey: elementKey(el),
       url: location.href,
+      page: pageId,
       pageTitle: document.title,
       t: Date.now(),
       ...extra,
@@ -396,29 +423,50 @@ function createBar() {
   root.querySelector('.stop')!.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'stop' }))
   pauseBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'togglePause' }))
 
-  let visible = false
+  // The bar shows only when recording without video, no screenshot is being
+  // taken, and no recent "hold" is active. A new page waits a moment before
+  // showing it, so a screenshot of a page that just opened can't catch it.
+  let wanted = false
+  let busy = 0
+  let holdUntil = performance.now() + 600
+  let timer = 0
   const mount = () => {
     if (!host.isConnected) document.documentElement.appendChild(host)
+  }
+  const refresh = () => {
+    const now = performance.now()
+    const ok = wanted && busy === 0 && now >= holdUntil
+    host.style.visibility = ok ? 'visible' : 'hidden'
+    window.clearTimeout(timer)
+    if (wanted && busy === 0 && !ok) timer = window.setTimeout(refresh, holdUntil - now + 5)
   }
   return {
     update(s: RecorderState) {
       // No bar while recording video: it would appear in the video.
-      visible = s.recording && !s.video
-      if (!visible) {
+      wanted = s.recording && !s.video
+      if (!wanted) {
         host.remove()
         return
       }
       mount()
-      host.style.visibility = 'visible'
       barEl.classList.toggle('paused', s.paused)
       label.textContent = s.paused ? `Paused · ${s.count} steps` : `Capturing · ${s.count} step${s.count === 1 ? '' : 's'}`
       pauseBtn.textContent = s.paused ? 'Resume' : 'Pause'
+      refresh()
     },
-    hide() {
-      host.style.visibility = 'hidden'
+    // A step is being sent; its screenshot may be taken any moment.
+    begin() {
+      busy++
+      refresh()
     },
-    show() {
-      if (visible) host.style.visibility = 'visible'
+    end() {
+      busy = Math.max(0, busy - 1)
+      refresh()
+    },
+    // A screenshot is about to be taken.
+    hold(ms: number) {
+      holdUntil = Math.max(holdUntil, performance.now() + ms)
+      refresh()
     },
     contains(e: Event) {
       return e.composedPath().includes(host)
