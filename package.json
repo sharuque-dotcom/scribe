@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "e2e": "node tests/e2e.mjs && node tests/e2e-ai.mjs && node tests/e2e-video.mjs",
+    "e2e": "node tests/e2e.mjs && node tests/e2e-video.mjs",
+    "e2e:ai": "VITE_AI=1 npm run build && node tests/e2e-ai.mjs",
     "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {

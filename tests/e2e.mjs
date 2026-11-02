@@ -161,7 +161,9 @@ try {
 
   // SOP from template, then export.
   await editor.goto(`chrome-extension://${extId}/editor.html${new URL(editor.url()).hash}/sop`)
-  await editor.getByRole('button', { name: /Use template/ }).click()
+  await pause(600)
+  check((await editor.getByText(/Claude/).count()) === 0, 'Claude features are switched off (no buttons or text)')
+  await editor.getByRole('button', { name: /Use template|Create from steps/ }).click()
   await pause(1500)
   const frame = editor.frameLocator('iframe[title="Document preview"]')
   check((await frame.locator('h2').allTextContents()).includes('4. Procedure'), 'SOP has a procedure section')
@@ -169,7 +171,7 @@ try {
   await editor.screenshot({ path: join(out, '4-sop.png') })
 
   await editor.goto(`chrome-extension://${extId}/editor.html${new URL(editor.url()).hash.replace('/sop', '/training')}`)
-  await editor.getByRole('button', { name: /Use template/ }).click()
+  await editor.getByRole('button', { name: /Use template|Create from steps/ }).click()
   await pause(1500)
   await editor.screenshot({ path: join(out, '5-training.png') })
 

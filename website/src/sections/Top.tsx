@@ -92,7 +92,7 @@ export function Hero() {
           <span className="bg-gradient-to-r from-brand via-violet-500 to-ember bg-clip-text text-transparent">Explain it forever.</span>
         </h1>
         <p className="mx-auto mt-7 max-w-2xl text-[18px] leading-relaxed text-soft sm:text-[20px]" data-hero>
-          Click through any task in your browser. StepCrumb turns it into a <b className="font-semibold text-ink">step-by-step guide</b>, an <b className="font-semibold text-ink">SOP</b>, a <b className="font-semibold text-ink">training module</b> and a <b className="font-semibold text-ink">narrated video</b> that zooms where you click. It's all saved on your computer, not in a cloud.
+          Click through any task in your browser. StepCrumb turns it into a <b className="font-semibold text-ink">step-by-step guide</b>, an <b className="font-semibold text-ink">SOP</b>, a <b className="font-semibold text-ink">training module</b> and a <b className="font-semibold text-ink">narrated video</b> that zooms where you click. Nothing you capture leaves your computer.
         </p>
         <div className="mt-9 flex flex-wrap justify-center gap-3" data-hero>
           <a href={CONFIG.chromeStoreUrl} className="btn-dark px-7 py-3.5 text-[16px]">

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadSettings, writeDocument } from '../../shared/ai'
+import { AI_ENABLED } from '../../shared/features'
 import { download, markdownToHtml, markdownWithImages, printHtml, shotsByNumber, slug, wrapHtml, type Rendered } from '../../shared/export'
 import { buildSop, buildTraining } from '../../shared/templates'
 import type { DocKind, Guide } from '../../shared/types'
@@ -135,12 +136,14 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
           </button>
         ) : (
           <>
-            <button className="btn-secondary" onClick={fromTemplate} disabled={!guide.steps.length}>
-              <Icon name="doc" /> {doc ? 'Rebuild from template' : 'Use template'}
+            <button className={AI_ENABLED ? 'btn-secondary' : 'btn-primary'} onClick={fromTemplate} disabled={!guide.steps.length}>
+              <Icon name="doc" /> {doc ? (AI_ENABLED ? 'Rebuild from template' : 'Rebuild from steps') : AI_ENABLED ? 'Use template' : 'Create from steps'}
             </button>
-            <button className="btn-primary" onClick={withAi} disabled={!guide.steps.length || !rendered}>
-              <Icon name="sparkle" /> {doc?.source === 'ai' ? 'Rewrite with Claude' : 'Write with Claude'}
-            </button>
+            {AI_ENABLED && (
+              <button className="btn-primary" onClick={withAi} disabled={!guide.steps.length || !rendered}>
+                <Icon name="sparkle" /> {doc?.source === 'ai' ? 'Rewrite with Claude' : 'Write with Claude'}
+              </button>
+            )}
             {doc && (
               <>
                 <button className="btn-secondary" onClick={() => setEditing((e) => !e)}>
@@ -186,9 +189,11 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
           </div>
           <h3 className="mb-1 text-base font-semibold">Create a {LABELS[kind].name.toLowerCase()}</h3>
           <p className="mx-auto mb-5 max-w-md text-sm text-muted">{LABELS[kind].blurb}</p>
-          <p className="mx-auto max-w-md text-xs text-muted">
-            <strong>Use template</strong> works offline from your steps. <strong>Write with Claude</strong> reads your steps and screenshots and writes the full document.
-          </p>
+          {AI_ENABLED && (
+            <p className="mx-auto max-w-md text-xs text-muted">
+              <strong>Use template</strong> works offline from your steps. <strong>Write with Claude</strong> reads your steps and screenshots and writes the full document.
+            </p>
+          )}
         </div>
       ) : editing ? (
         <div>

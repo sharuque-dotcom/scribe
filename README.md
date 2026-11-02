@@ -2,7 +2,7 @@
 
 Click through any website and get a step-by-step guide with annotated screenshots, then turn it into an SOP or a training module.
 
-It's a Chrome/Edge extension with a built-in editor. Everything is stored in your browser. Nothing you capture leaves your machine unless you use the optional Claude features, and then only when you click them. Otherwise StepCrumb goes online only to check a license key and, once, to download the free voice model.
+It's a Chrome/Edge extension with a built-in editor. Everything is stored in your browser, and nothing you capture leaves your machine. StepCrumb goes online only to check a license key and, once, to download the free voice model.
 
 ## What it does
 
@@ -13,7 +13,7 @@ It's a Chrome/Edge extension with a built-in editor. Everything is stored in you
 - a written instruction, e.g. `Click the "Save" button` or `Type "Acme" into the "Company" field`
 - passwords and other secret fields (card numbers, API keys, tokens) blurred automatically, in the saved screenshot itself, so the readable value is never stored. Their values never appear in step text.
 
-**Zoom.** Screenshots zoom in on what you clicked so field names and values are readable. The first step on each page stays full screen, so readers can see where they are. Later steps on that page zoom in on the clicked element and its label, at up to 3×, with a small full-page thumbnail in the corner marking the zoomed area. Large click areas, navigation and key presses stay full screen. Every step has an **Auto / Full screen / Zoom** switch, with a slider and *Move zoom area*. The **Screenshots** menu sets the rule for the whole guide (auto, always zoom, always full screen) and turns the thumbnail on or off. The original full screenshot is always kept (with secret fields already blurred). Claude is sent the full screenshots, so it can see the whole page.
+**Zoom.** Screenshots zoom in on what you clicked so field names and values are readable. The first step on each page stays full screen, so readers can see where they are. Later steps on that page zoom in on the clicked element and its label, at up to 3×, with a small full-page thumbnail in the corner marking the zoomed area. Large click areas, navigation and key presses stay full screen. Every step has an **Auto / Full screen / Zoom** switch, with a slider and *Move zoom area*. The **Screenshots** menu sets the rule for the whole guide (auto, always zoom, always full screen) and turns the thumbnail on or off. The original full screenshot is always kept (with secret fields already blurred).
 
 Clicking a field and then typing becomes one step, not two. A small bar on the page lets you pause or finish, and it never shows up in the screenshots.
 
@@ -43,14 +43,12 @@ While recording video there's no control bar on the page (it would end up in the
 - annotate screenshots with boxes, arrows, text labels, numbered markers, blur (pixelated redaction), spotlight (dims everything else) and a hand-drawn zoom area
 - upload a screenshot for a step you added by hand
 
-**Write SOPs and training.** Each guide has two document tabs:
+**Write SOPs and training.** Each guide has two document tabs, built offline from your steps:
 
-| | Template (offline) | Write with Claude |
-|---|---|---|
-| **SOP** | Purpose, scope, prerequisites, numbered procedure with screenshots, expected result, revision history | Adds roles and responsibilities, grouped phases, and troubleshooting, all written from your steps and screenshots |
-| **Training** | Objectives, walkthrough, practice checklist, simple quiz, quick reference | Adds "why this matters" notes, common mistakes, a practice scenario, and a 5-question multiple-choice quiz with answer key |
+- **SOP**: purpose, scope, prerequisites, numbered procedure with screenshots, expected result, revision history.
+- **Training**: objectives, walkthrough, practice checklist, simple quiz, quick reference.
 
-*Improve steps with Claude* rewrites the title, description and every step in one go, using the screenshots to name buttons exactly. It can be undone.
+**Claude writing (off in this release).** The code for writing SOPs and training with Claude, and for *Improve steps with Claude*, is still here but hidden. Build with `VITE_AI=1` to turn it on (see the section near the end).
 
 **Export.** You can export guides and documents as PDF (through the print dialog), a standalone HTML page, or Markdown with embedded images. Guides can also be saved as a `.stepcrumb.json` backup and imported again.
 
@@ -96,8 +94,6 @@ Then in Chrome or Edge:
 2. Click the extension icon and choose Screenshots, Screenshots + video or Video only, and press **Start**. The shortcut is `Alt+Shift+R`.
 3. Do the task. Pause from the page bar if you need to do something you don't want recorded.
 4. Press **Finish**. The editor opens with your guide.
-
-To use Claude, open **Settings** (the gear icon) in the editor and paste an Anthropic API key from [console.anthropic.com](https://console.anthropic.com). You can also set the audience ("new support agents") and tone. The key is stored only in this browser. Requests go directly from your browser to `api.anthropic.com` using `claude-opus-5-5`, with Anthropic's automatic fallback turned on in case a request is declined. Screenshots are sent after blurring is applied, and you can turn sending screenshots off.
 
 You can try the editor without capturing anything: open the library and click **Open a sample guide**.
 
@@ -149,14 +145,20 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 - Both browser tests run each flow twice, on the free plan and after activating a key against a fake Lemon Squeezy server (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
 - **`tests/e2e-screen.mjs`** starts a recording through Chrome's share dialog, picks the entire screen, and checks that it's detected as a screen recording and that clicks land at the right spot in the video. Add `video` as the last argument to test video-only mode. It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out screen [video]`.
-- **`tests/e2e-ai.mjs`** runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
+- **`tests/e2e-ai.mjs`** (`npm run e2e:ai`, which builds with Claude switched on) runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
+
+## Claude writing (off in this release)
+
+Hidden behind one switch, `AI_ENABLED` in `src/shared/features.ts`, which is on only when the editor is built with `VITE_AI=1`. With it off, the Claude buttons and Settings fields are gone and the Anthropic code isn't in the built extension.
+
+With it on: open **Settings** (the gear icon) and paste an Anthropic API key from [console.anthropic.com](https://console.anthropic.com). You can also set the audience ("new support agents") and tone. The key is stored only in this browser. Requests go directly from the browser to `api.anthropic.com` using `claude-opus-5-5`, with Anthropic's automatic fallback turned on. Screenshots are sent after blurring, and sending them can be turned off. *Write with Claude* adds roles, phases and troubleshooting to SOPs, and "why this matters" notes, common mistakes, a practice scenario and a 5-question quiz to training. *Improve steps with Claude* rewrites the title, description and every step in one go (it can be undone). Turning it on means the website's privacy wording must mention it again.
 
 ## Limitations
 
 - Only the top-level page is captured. Clicks inside iframes, such as embedded payment forms, aren't recorded.
 - Chrome allows about two screenshots per second. If you click faster than that, a screenshot can show the page slightly after the click.
 - Browser pages (`chrome://`, the Web Store, the PDF viewer) can't be captured.
-- Apps drawn entirely on a canvas, like Figma or Google Sheets cells, produce generic step text ("Click here"). Edit it, or use *Improve steps with Claude*.
+- Apps drawn entirely on a canvas, like Figma or Google Sheets cells, produce generic step text ("Click here"). Edit it by hand.
 - A tab recording shows one browser tab; steps in other tabs appear in the guide but not the video. Pick a window or the entire screen to include them.
 - Steps (and the zooms that follow them) only come from clicks inside the browser. Clicks in desktop apps show in a window/screen video but don't become steps.
 - Click positions in window/screen videos assume the browser window isn't moved during recording. With several monitors, record the one the browser is on.

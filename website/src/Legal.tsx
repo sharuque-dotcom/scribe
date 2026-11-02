@@ -11,12 +11,11 @@ function Privacy() {
       <h1>Privacy policy</h1>
       <p className="lead">StepCrumb is built to work on your computer. We don't collect what you capture.</p>
       <h2>What stays on your computer</h2>
-      <p>Screenshots, screen recordings, guides, documents, voiceovers and settings are stored in your browser's storage on your computer. They are not sent to us. They are sent to someone else only if you use the optional AI writing described below. Passwords, card numbers and other secret fields are blurred before screenshots and recordings are saved, so the readable values are never stored.</p>
+      <p>Screenshots, screen recordings, guides, documents, voiceovers and settings are stored in your browser's storage on your computer. They are not sent to us or anyone else. Passwords, card numbers and other secret fields are blurred before screenshots and recordings are saved, so the readable values are never stored.</p>
       <h2>When StepCrumb goes online</h2>
       <ul>
         <li><b>License check.</b> If you enter a license key, StepCrumb sends the key and an activation ID to our payment provider, Lemon Squeezy, to confirm it, then again every few days.</li>
         <li><b>Voice model.</b> The first time you generate a voiceover, StepCrumb downloads the free voice model from Hugging Face. After that it works offline. No text is sent for this.</li>
-        <li><b>Optional AI writing.</b> If you add your own Anthropic API key and click “Write with Claude” or “Improve steps with Claude”, the steps (and screenshots, if you allow it) are sent to Anthropic to write the text. This only happens when you click it.</li>
       </ul>
       <h2>Payments</h2>
       <p>Purchases are handled by Lemon Squeezy, which processes your payment details and email address under its own privacy policy. We receive your email and order details so we can send your license and support you.</p>

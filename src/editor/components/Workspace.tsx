@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadSettings, polishSteps } from '../../shared/ai'
+import { AI_ENABLED } from '../../shared/features'
 import { deleteImage, putImage } from '../../shared/db'
 import { download, guideBodyHtml, guideJson, guideMarkdown, printHtml, renderAll, slug, wrapHtml, type Rendered } from '../../shared/export'
 import { stepNumbers } from '../../shared/templates'
@@ -361,7 +362,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                   )}
                 </Dropdown>
               )}
-              {!readOnly && (
+              {AI_ENABLED && !readOnly && (
                 <button className="btn-secondary" onClick={polish} disabled={polishing || !nums.size}>
                   <Icon name="sparkle" /> {polishing ? 'Improving…' : 'Improve steps with Claude'}
                 </button>
