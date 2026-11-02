@@ -1,5 +1,6 @@
 // Draws a step's screenshot with its crop, redactions, click highlight and
 // annotations baked in. Used for the editor cards, previews, exports and AI input.
+import { pixelateBox } from './redact'
 import type { Annotation, NRect, Step, StoredImage } from './types'
 
 export const COLORS = ['#f97316', '#ef4444', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#111827', '#ffffff']
@@ -188,17 +189,7 @@ function pixelate(
   const w = Math.min(canvas.width - x, Math.ceil(X(r.x + r.w) - X(r.x)))
   const h = Math.min(canvas.height - y, Math.ceil(Y(r.y + r.h) - Y(r.y)))
   if (w <= 0 || h <= 0) return
-  // Shrink hard, then scale back up without smoothing. Heavy enough that text can't be recovered.
-  const block = Math.max(8, Math.round(Math.min(w, h) / 3))
-  const tiny = document.createElement('canvas')
-  tiny.width = Math.max(1, Math.ceil(w / block))
-  tiny.height = Math.max(1, Math.ceil(h / block))
-  const t = tiny.getContext('2d')!
-  t.drawImage(canvas, x, y, w, h, 0, 0, tiny.width, tiny.height)
-  ctx.save()
-  ctx.imageSmoothingEnabled = false
-  ctx.drawImage(tiny, 0, 0, tiny.width, tiny.height, x, y, w, h)
-  ctx.restore()
+  pixelateBox(ctx, canvas, { x, y, w, h })
 }
 
 function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

@@ -82,6 +82,9 @@ export function SettingsDialog({ onClose }: { onClose: (saved?: AiSettings) => v
       <div className="space-y-4 text-sm">
         <LicenseSection />
         <h3 className="border-t border-line pt-4 font-semibold">AI writing (optional)</h3>
+        <p className="-mt-2 text-xs text-muted">
+          Everything else in StepCrumb stays on this computer. When you click a Claude button, the step text (and screenshots, if ticked below, with secret fields already blurred) is sent to Anthropic using your key.
+        </p>
         <label className="block">
           <span className="mb-1 block font-medium">Anthropic API key</span>
           <input className="input font-mono" type="password" autoComplete="off" placeholder="sk-ant-..." value={s.apiKey} onChange={(e) => setS({ ...s, apiKey: e.target.value.trim() })} />

@@ -1,6 +1,7 @@
 // Extension service worker: owns recording state, takes screenshots,
 // and writes steps into IndexedDB as they arrive.
 import { describeEvent, shouldMerge } from '../shared/describe'
+import { pixelateRects } from '../shared/redact'
 import { deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
 import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
@@ -44,6 +45,7 @@ async function hideBar(tabId: number | undefined): Promise<NRect[] | undefined> 
 async function screenshot(
   windowId: number,
   tabId?: number,
+  fallbackRedact: NRect[] = [],
 ): Promise<{ dataUrl: string; w: number; h: number; redact?: NRect[] }> {
   for (let attempt = 0; ; attempt++) {
     const wait = lastCapture + MIN_GAP_MS - Date.now()
@@ -51,16 +53,32 @@ async function screenshot(
     const redact = await hideBar(tabId)
     lastCapture = Date.now()
     try {
-      const dataUrl = await chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 88 })
-      const blob = await (await fetch(dataUrl)).blob()
-      const bmp = await createImageBitmap(blob)
+      const raw = await chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 88 })
+      const bmp = await createImageBitmap(await (await fetch(raw)).blob())
       const size = { w: bmp.width, h: bmp.height }
+      const secrets = redact ?? fallbackRedact
+      // Secret fields are pixelated in the saved image itself, so the readable
+      // value never reaches storage.
+      let dataUrl = raw
+      if (secrets.length) {
+        const canvas = new OffscreenCanvas(size.w, size.h)
+        canvas.getContext('2d')!.drawImage(bmp, 0, 0)
+        pixelateRects(canvas, secrets)
+        dataUrl = await blobToDataUrl(await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 }))
+      }
       bmp.close()
       return { dataUrl, ...size, redact }
     } catch (err) {
       if (attempt >= 3) throw err
     }
   }
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return `data:${blob.type};base64,${btoa(bin)}`
 }
 
 // Steps are processed one at a time, in the order they arrive.
@@ -80,7 +98,7 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number) {
   // Video-only captures still record each step (it becomes a caption and a zoom)
   // but skip the screenshot.
   const shots = guide.mode !== 'video'
-  const { redact, ...shot } = shots ? await screenshot(windowId, tabId) : { redact: [] as NRect[], dataUrl: '', w: 0, h: 0 }
+  const { redact, ...shot } = shots ? await screenshot(windowId, tabId, event.redactRects) : { redact: [] as NRect[], dataUrl: '', w: 0, h: 0 }
   const imageId = shots ? uid() : undefined
   if (imageId) await putImage({ id: imageId, ...shot })
 
@@ -214,10 +232,10 @@ async function startDesktopVideo(source: 'window' | 'screen' | 'pick'): Promise<
 
 // Recordings made in the recorder window have its windowId; tab recordings
 // started without Chrome's dialog run in the offscreen document.
-async function stopVideo(rec: VideoRecording, videoId: string | null): Promise<number> {
+async function stopVideo(rec: VideoRecording, videoId: string | null, redact: RedactSample[] = []): Promise<number> {
   if (rec.windowId !== undefined) {
     try {
-      const res = (await chrome.runtime.sendMessage({ target: 'recorder', type: 'rec-stop', videoId })) as { duration?: number } | undefined
+      const res = (await chrome.runtime.sendMessage({ target: 'recorder', type: 'rec-stop', videoId, redact })) as { duration?: number } | undefined
       return res?.duration ?? 0
     } catch {
       return 0
@@ -226,7 +244,7 @@ async function stopVideo(rec: VideoRecording, videoId: string | null): Promise<n
     }
   }
   try {
-    const res = await toOffscreen<{ duration: number }>({ type: 'rec-stop', videoId })
+    const res = await toOffscreen<{ duration: number }>({ type: 'rec-stop', videoId, redact })
     return res?.duration ?? 0
   } catch {
     return 0
@@ -347,7 +365,8 @@ async function stop(openEditor = true): Promise<RecorderState> {
   const state = await getState()
   if (state.guideId) {
     if (state.rec) await flushTracks(true)
-    const duration = state.rec ? await stopVideo(state.rec, state.rec.id) : 0
+    const saved = await getGuide(state.guideId)
+    const duration = state.rec ? await stopVideo(state.rec, state.rec.id, saved?.video?.redact ?? []) : 0
     const guide = await getGuide(state.guideId)
     if (guide) {
       if (guide.video) {

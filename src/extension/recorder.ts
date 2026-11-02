@@ -48,8 +48,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     return
   }
   if (msg.type === 'rec-stop') {
-    status.textContent = 'Saving the recording…'
-    stopRecording(msg.videoId ?? null).then(reply, (err) => reply({ error: String(err?.message ?? err) }))
+    status.textContent = 'Saving the recording (secret fields are blurred first)…'
+    stopRecording(msg.videoId ?? null, msg.redact ?? []).then(reply, (err) => reply({ error: String(err?.message ?? err) }))
     return true
   }
 })

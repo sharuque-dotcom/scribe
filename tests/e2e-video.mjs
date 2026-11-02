@@ -72,6 +72,10 @@ try {
 
   await clickOn(page, '#email'); await page.keyboard.type('sam@acme.io', { delay: 40 }); await pause(500)
   await clickOn(page, '#pw'); await page.keyboard.type('hunter2', { delay: 40 }); await pause(500)
+  const fields = await page.evaluate(() => Object.fromEntries(['email', 'pw'].map((id) => {
+    const r = document.getElementById(id).getBoundingClientRect()
+    return [id, { x: r.x / innerWidth, y: r.y / innerHeight, w: r.width / innerWidth, h: r.height / innerHeight }]
+  })))
   await clickOn(page, 'text=Keep me signed in'); await pause(600)
   await clickOn(page, 'button[type=submit]'); await page.waitForURL(/dashboard/); await pause(1200)
   await page.mouse.move(640, 400, { steps: 8 })
@@ -106,6 +110,44 @@ try {
   check(info.steps.every((s, i) => typeof s.time === 'number' && (i === 0 || s.time >= info.steps[i - 1].time)), 'every step has a time, in order')
   check(info.steps[0].time < 1000 && info.steps.at(-1).time < info.video.duration, 'step times fall inside the video')
   writeFileSync(join(out, 'video-info.json'), JSON.stringify(info, null, 2))
+
+  // The saved video file itself has the password field pixelated: look at the frame
+  // where "Keep me signed in" is clicked (password typed, field on screen).
+  const at = info.steps.find((s) => /Keep me signed in/.test(s.title)).time
+  const dark = await editor.evaluate(async ({ id, fields, at }) => {
+    const db = await new Promise((r) => { const q = indexedDB.open('scribe'); q.onsuccess = () => r(q.result) })
+    const get = (store, key) => new Promise((r) => { const q = db.transaction(store).objectStore(store).get(key); q.onsuccess = () => r(q.result) })
+    const g = await get('guides', id)
+    const v = await get('videos', g.video.blobId)
+    const el = document.createElement('video')
+    el.muted = true
+    el.src = URL.createObjectURL(v.blob)
+    await new Promise((r) => (el.onloadeddata = r))
+    const out = []
+    for (const t of [at - 300, at + 300]) {
+      el.currentTime = t / 1000
+      await new Promise((r) => (el.onseeked = r))
+      const c = document.createElement('canvas')
+      c.width = el.videoWidth
+      c.height = el.videoHeight
+      const ctx = c.getContext('2d')
+      ctx.drawImage(el, 0, 0)
+      const darkIn = (r) => {
+        const x = Math.round((r.x + r.w * 0.04) * c.width), y = Math.round((r.y + r.h * 0.2) * c.height)
+        const d = ctx.getImageData(x, y, Math.round(r.w * 0.6 * c.width), Math.round(r.h * 0.6 * c.height)).data
+        let n = 0
+        for (let i = 0; i < d.length; i += 4) if (0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2] < 110) n++
+        return n
+      }
+      out.push({ t, email: darkIn(fields.email), pw: darkIn(fields.pw), png: out.length ? undefined : c.toDataURL('image/png') })
+    }
+    return out
+  }, { id: guideId, fields, at })
+  writeFileSync(join(out, 'v-saved-frame.png'), Buffer.from(dark[0].png.split(',')[1], 'base64'))
+  dark.forEach((d) => delete d.png)
+  console.log('   dark pixels in saved video frames:', JSON.stringify(dark))
+  check(dark.every((d) => d.email > 20), 'saved video shows the (non-secret) email text, so the check can see text')
+  check(dark.every((d) => d.pw === 0), 'password field is pixelated in the saved video file')
   // ---------- Video tab ----------
   await editor.goto(editor.url() + '/video')
   await editor.waitForSelector('canvas[aria-label="Video preview"]')

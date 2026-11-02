@@ -50,6 +50,11 @@ try {
 
   await page.click('#email'); await page.keyboard.type('sam@acme.io'); await pause(700)
   await page.click('#pw'); await page.keyboard.type('hunter2'); await pause(700)
+  // Where the email and password fields sit, as 0..1 of the page (for the saved-image check below).
+  const fields = await page.evaluate(() => Object.fromEntries(['email', 'pw'].map((id) => {
+    const r = document.getElementById(id).getBoundingClientRect()
+    return [id, { x: r.x / innerWidth, y: r.y / innerHeight, w: r.width / innerWidth, h: r.height / innerHeight }]
+  })))
   await page.click('text=Keep me signed in'); await pause(700)
   await page.click('button[type=submit]'); await page.waitForURL(/dashboard/); await pause(1200)
   await page.click('#new'); await pause(700)
@@ -70,6 +75,42 @@ try {
   check(titles.includes('Type "sam@acme.io" into the "Work email" field'), 'click + typing merged into one step')
   check(titles.includes('Enter your password in the "Password" field'), 'password value is never written')
   check(!titles.join(' ').includes('hunter2'), 'password text does not appear anywhere')
+
+  // The saved screenshot itself (not just the editor view) has the password field pixelated.
+  const guideId = new URL(editor.url()).hash.split('/')[2]
+  const dark = await editor.evaluate(async ({ id, fields }) => {
+    const db = await new Promise((r) => { const q = indexedDB.open('scribe'); q.onsuccess = () => r(q.result) })
+    const get = (store, key) => new Promise((r) => { const q = db.transaction(store).objectStore(store).get(key); q.onsuccess = () => r(q.result) })
+    const g = await get('guides', id)
+    const out = []
+    // Steps taken on the sign-in page after the password was typed.
+    const at = g.steps.findIndex((s) => /password/i.test(s.title))
+    for (const s of g.steps.slice(at, at + 2)) {
+      const stored = await get('images', s.imageId)
+      const img = new Image()
+      img.src = stored.dataUrl
+      await img.decode()
+      const c = document.createElement('canvas')
+      c.width = img.naturalWidth
+      c.height = img.naturalHeight
+      const ctx = c.getContext('2d')
+      ctx.drawImage(img, 0, 0)
+      // Count dark pixels (typed characters or password dots) inside each field, away from its border.
+      const darkIn = (r) => {
+        const x = Math.round((r.x + r.w * 0.04) * c.width), y = Math.round((r.y + r.h * 0.2) * c.height)
+        const w = Math.round(r.w * 0.6 * c.width), h = Math.round(r.h * 0.6 * c.height)
+        const d = ctx.getImageData(x, y, w, h).data
+        let n = 0
+        for (let i = 0; i < d.length; i += 4) if (0.3 * d[i] + 0.59 * d[i + 1] + 0.11 * d[i + 2] < 110) n++
+        return n
+      }
+      out.push({ title: s.title, email: darkIn(fields.email), pw: darkIn(fields.pw) })
+    }
+    return out
+  }, { id: guideId, fields })
+  console.log('   dark pixels in saved images:', JSON.stringify(dark))
+  check(dark.length === 2 && dark.every((d) => d.email > 20), 'saved images show the (non-secret) email text, so the check can see text')
+  check(dark.every((d) => d.pw === 0), 'password field is pixelated in the saved screenshot files')
   check(titles.includes('Check "Keep me signed in"'), 'checkbox via its label')
   check(titles.includes('Click the "Sign in" button'), 'button click')
   check(titles.includes('Type "Q3 launch" into the "Project name" field'), 'typing on second page')

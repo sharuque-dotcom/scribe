@@ -2,7 +2,7 @@
 
 Click through any website and get a step-by-step guide with annotated screenshots, then turn it into an SOP or a training module.
 
-It's a Chrome/Edge extension with a built-in editor. Everything is stored in your browser. The only thing that leaves your machine is what you send to Claude, and only when you ask it to write.
+It's a Chrome/Edge extension with a built-in editor. Everything is stored in your browser. Nothing you capture leaves your machine unless you use the optional Claude features, and then only when you click them. Otherwise StepCrumb goes online only to check a license key and, once, to download the free voice model.
 
 ## What it does
 
@@ -11,9 +11,9 @@ It's a Chrome/Edge extension with a built-in editor. Everything is stored in you
 - a screenshot of the page at that moment
 - an orange highlight around what you clicked
 - a written instruction, e.g. `Click the "Save" button` or `Type "Acme" into the "Company" field`
-- passwords and other secret fields (card numbers, API keys, tokens) blurred automatically. Their values never appear in step text.
+- passwords and other secret fields (card numbers, API keys, tokens) blurred automatically, in the saved screenshot itself, so the readable value is never stored. Their values never appear in step text.
 
-**Zoom.** Screenshots zoom in on what you clicked so field names and values are readable. The first step on each page stays full screen, so readers can see where they are. Later steps on that page zoom in on the clicked element and its label, at up to 3×, with a small full-page thumbnail in the corner marking the zoomed area. Large click areas, navigation and key presses stay full screen. Every step has an **Auto / Full screen / Zoom** switch, with a slider and *Move zoom area*. The **Screenshots** menu sets the rule for the whole guide (auto, always zoom, always full screen) and turns the thumbnail on or off. The original full screenshot is always kept. Claude is sent the full screenshots, so it can see the whole page.
+**Zoom.** Screenshots zoom in on what you clicked so field names and values are readable. The first step on each page stays full screen, so readers can see where they are. Later steps on that page zoom in on the clicked element and its label, at up to 3×, with a small full-page thumbnail in the corner marking the zoomed area. Large click areas, navigation and key presses stay full screen. Every step has an **Auto / Full screen / Zoom** switch, with a slider and *Move zoom area*. The **Screenshots** menu sets the rule for the whole guide (auto, always zoom, always full screen) and turns the thumbnail on or off. The original full screenshot is always kept (with secret fields already blurred). Claude is sent the full screenshots, so it can see the whole page.
 
 Clicking a field and then typing becomes one step, not two. A small bar on the page lets you pause or finish, and it never shows up in the screenshots.
 
@@ -23,7 +23,7 @@ Clicking a field and then typing becomes one step, not two. A small bar on the p
 - a smooth, larger cursor and a click ripple (tab recordings have no cursor, so it's drawn from the recorded mouse path)
 - captions at the bottom from the step text ("Click the Save button"), with an optional narration line per step
 - a free voiceover read from the same text, generated on your computer with the Kokoro model. The first use downloads about 90 MB. If a line runs longer than the action, the video holds that frame until it finishes.
-- secret fields blurred in every frame
+- secret fields blurred in every frame. The saved recording is re-encoded with them blurred when you finish, so the readable values are never stored (saving takes a little longer when a secret field was on screen)
 - a timeline where you drag, resize, add and delete zooms and trim the start and end
 - export at 1080p/30 fps with captions and voice built in, plus `.srt`/`.vtt` subtitle files. Chrome on Windows and Mac saves MP4 (H.264 + AAC); browsers without an H.264 encoder save WebM.
 

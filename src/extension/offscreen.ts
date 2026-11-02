@@ -16,7 +16,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
           mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: msg.streamId, maxFrameRate: 30, minWidth: msg.w, maxWidth: msg.w, minHeight: msg.h, maxHeight: msg.h },
         } as MediaTrackConstraints)
       : msg.type === 'rec-stop'
-        ? stopRecording(msg.videoId ?? null)
+        ? stopRecording(msg.videoId ?? null, msg.redact ?? [])
         : null
   if (!run) return
   run.then(reply, (err) => reply({ error: String(err?.message ?? err) }))

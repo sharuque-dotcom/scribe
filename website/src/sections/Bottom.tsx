@@ -7,7 +7,7 @@ const USES: { title: string; body: string; tags: string[]; emoji: string }[] = [
   { emoji: '🛠️', title: 'IT & support', body: 'Answer “how do I…?” with a link to a guide instead of another call. Passwords stay blurred.', tags: ['Guide', 'PDF'] },
   { emoji: '📋', title: 'Operations & SOPs', body: 'Turn the way your best people work into procedures with purpose, scope and revision history.', tags: ['SOP', 'Word'] },
   { emoji: '🎓', title: 'Customer training', body: 'Ship narrated walkthroughs of your product without booking a studio or a voice actor.', tags: ['Video', 'Voiceover'] },
-  { emoji: '🔒', title: 'Regulated teams', body: 'Healthcare, finance, government: document systems without sending screens of them to anyone.', tags: ['Local only', 'SOP'] },
+  { emoji: '🔒', title: 'Regulated teams', body: 'Healthcare, finance, government: screens stay on your computer and secret fields are blurred before saving. Leave the AI writing off and nothing leaves it.', tags: ['Local only', 'SOP'] },
   { emoji: '🚀', title: 'System rollouts', body: 'Going live on a new CRM or ERP? Build the training pack while you configure it.', tags: ['Training', 'Quiz'] },
 ]
 
@@ -41,10 +41,10 @@ export function UseCases() {
 }
 
 const PRIVACY = [
-  ['Nothing uploaded', 'Screenshots, recordings, guides and voice all stay in your browser, on your computer.'],
+  ['Saved on your computer', 'Screenshots, recordings, guides and voice are stored in your browser. Nothing is uploaded unless you turn on the optional Claude writing.'],
   ['No account', 'Install and go. Paid features unlock with a license key, not a login.'],
-  ['Secrets blurred', 'Passwords, card numbers and tokens are blurred in screenshots and every video frame.'],
-  ['Works offline', 'After the one-time voice download, everything runs without an internet connection.'],
+  ['Secrets blurred', 'Passwords, card numbers and tokens are blurred before anything is saved, in screenshots and every video frame.'],
+  ['Works offline', 'After the one-time voice download, everything except the optional Claude writing runs without an internet connection.'],
 ]
 
 export function Privacy() {
@@ -81,7 +81,7 @@ const ROWS: [string, Cell, Cell, Cell][] = [
   ['Captions from your steps', true, false, 'Transcribed captions'],
   ['AI voiceover', 'Free, on your computer', false, 'Yes, sent to the cloud'],
   ['Passwords blurred automatically', true, 'Enterprise plan', false],
-  ['Everything stays on your computer', true, false, 'Mostly'],
+  ['Saved on your computer, no cloud account', true, false, 'Mostly'],
   ['Works on Windows', true, true, 'macOS only'],
 ]
 
@@ -240,8 +240,8 @@ export function Pricing() {
 }
 
 const FAQS: [string, string][] = [
-  ['Is everything really on my computer?', 'Yes. Screenshots, recordings, guides, documents and voiceovers are stored in your browser on your computer. StepCrumb only goes online to check a license key, and once to download the free voice model. If you choose to use the optional Claude writing feature with your own API key, that text goes to Anthropic only when you click it.'],
-  ['Which browsers and computers does it work on?', 'Chrome and Microsoft Edge (and other Chromium browsers) on Windows, Mac, Linux and ChromeOS. It records one browser tab, so it works with anything you can open in a browser.'],
+  ['Is everything really on my computer?', 'Your screenshots, recordings, guides, documents and voiceovers are stored in your browser on your computer, never on our servers. StepCrumb goes online only to check a license key and, once, to download the free voice model. The one exception is the optional Claude writing: if you add your own Anthropic API key and click “Write with Claude” or “Improve steps with Claude”, the step text (and screenshots, if you allow it, with secret fields already blurred) is sent to Anthropic. Leave it off and nothing you capture leaves your computer.'],
+  ['Which browsers and computers does it work on?', 'Chrome and Microsoft Edge (and other Chromium browsers) on Windows, Mac, Linux and ChromeOS. Guides come from anything you can open in a browser. Videos can record a tab, a window or your whole screen.'],
   ['Do I need an account?', 'No. The free plan needs nothing at all. When you buy, a license key arrives by email; paste it into Settings and the paid features unlock.'],
   ['What does “lifetime” mean?', `One payment of $${CONFIG.founding.price} unlocks every paid feature for as long as StepCrumb exists, including updates. Your key works on 2 computers (say, work and home). Getting a new computer? Email us and we'll move it.`],
   ['What happens after the first 1,000?', `Lifetime access closes and new customers pay $${CONFIG.pro.monthly}/month or $${CONFIG.pro.yearly}/year. Founding members keep lifetime access.`],
