@@ -4,6 +4,9 @@ import { download, markdownToHtml, markdownWithImages, printHtml, shotsByNumber,
 import { buildSop, buildTraining } from '../../shared/templates'
 import type { DocKind, Guide } from '../../shared/types'
 import { Dropdown, Icon, type ToastData } from '../ui'
+import { usePlan } from '../usePlan'
+import { lockedToast } from '../upgrade'
+import { markdownDocx, toBlob } from '../../shared/docx'
 
 const LABELS: Record<DocKind, { name: string; blurb: string }> = {
   sop: {
@@ -68,7 +71,8 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
   const markdown = streaming ?? doc?.markdown ?? ''
   const shots = useMemo(() => (rendered ? shotsByNumber(guide, rendered) : {}), [guide, rendered])
   const previewMd = streaming !== null ? (throttled ?? '') : markdown
-  const html = useMemo(() => wrapHtml(guide.title, markdownToHtml(previewMd, shots)), [previewMd, shots, guide.title])
+  const { pro } = usePlan()
+  const html = useMemo(() => wrapHtml(guide.title, markdownToHtml(previewMd, shots), { branded: !pro }), [previewMd, shots, guide.title, pro])
 
   const fromTemplate = () => {
     if (doc && !confirm('Replace the current document with a fresh template?')) return
@@ -96,10 +100,12 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
     }
   }
 
-  const exportAs = (format: 'html' | 'pdf' | 'md' | 'copy') => {
-    const full = wrapHtml(guide.title, markdownToHtml(markdown, shots))
+  const exportAs = async (format: 'html' | 'pdf' | 'docx' | 'md' | 'copy') => {
+    if (!pro && format !== 'pdf') return toast(lockedToast(format === 'docx' ? 'Word export' : format === 'html' ? 'HTML export' : 'Markdown export'))
+    const full = wrapHtml(guide.title, markdownToHtml(markdown, shots), { branded: !pro })
     const name = `${slug(guide.title)}-${kind}`
-    if (format === 'html') download(`${name}.html`, full, 'text/html')
+    if (format === 'docx') download(`${name}.docx`, await toBlob(await markdownDocx(guide.title, markdown, shots)))
+    else if (format === 'html') download(`${name}.html`, full, 'text/html')
     else if (format === 'pdf') printHtml(full)
     else if (format === 'md') download(`${name}.md`, markdownWithImages(markdown, shots), 'text/markdown')
     else
@@ -145,7 +151,8 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
                     <>
                       {(
                         [
-                          ['pdf', 'PDF (print / save as PDF)'],
+                          ['pdf', pro ? 'PDF (print / save as PDF)' : 'PDF (with StepCrumb footer)'],
+                          ['docx', 'Word (.docx)'],
                           ['html', 'HTML page'],
                           ['md', 'Markdown (.md)'],
                           ['copy', 'Copy Markdown'],
@@ -156,10 +163,11 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
                           className="menu-item"
                           onClick={() => {
                             close()
-                            exportAs(f)
+                            void exportAs(f)
                           }}
                         >
                           {label}
+                          {!pro && f !== 'pdf' && <span className="ml-auto text-xs" title="Paid plan">🔒</span>}
                         </button>
                       ))}
                     </>

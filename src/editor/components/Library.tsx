@@ -5,12 +5,15 @@ import { renderStep } from '../../shared/render'
 import type { Guide } from '../../shared/types'
 import { uid } from '../../shared/types'
 import { createSampleGuide } from '../sample'
+import { PlanBadge } from './PlanBadge'
+import { SettingsDialog } from './Settings'
 import { Icon, isExtension, timeAgo, Toast, type ToastData } from '../ui'
 
 export function Library() {
   const [guides, setGuides] = useState<Guide[] | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string>>({})
   const [toast, setToast] = useState<ToastData | null>(null)
+  const [settings, setSettings] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const refresh = () => listGuides().then(setGuides)
@@ -60,10 +63,11 @@ export function Library() {
         <div className="mr-auto flex items-center gap-3">
           <img src="./icons/icon48.png" alt="" className="h-9 w-9" />
           <div>
-            <h1 className="text-xl font-bold">Scribe</h1>
+            <h1 className="text-xl font-bold">StepCrumb</h1>
             <p className="text-sm text-muted">Step-by-step guides, SOPs and training, captured as you click.</p>
           </div>
         </div>
+        <PlanBadge onOpen={() => setSettings(true)} />
         <button className="btn-secondary" onClick={() => fileInput.current?.click()}>
           <Icon name="upload" /> Import
         </button>
@@ -82,7 +86,7 @@ export function Library() {
             <>
               <p className="font-semibold">Capture a new guide</p>
               <p className="text-muted">
-                Go to the site you want to document, click the Scribe icon in the toolbar and press <strong>Start capturing</strong> (or press <kbd className="rounded border border-line bg-raised px-1">Alt</kbd>+<kbd className="rounded border border-line bg-raised px-1">Shift</kbd>+<kbd className="rounded border border-line bg-raised px-1">R</kbd>). Click through the task, then press <strong>Finish</strong>.
+                Go to the site you want to document, click the StepCrumb icon in the toolbar and press <strong>Start capturing</strong> (or press <kbd className="rounded border border-line bg-raised px-1">Alt</kbd>+<kbd className="rounded border border-line bg-raised px-1">Shift</kbd>+<kbd className="rounded border border-line bg-raised px-1">R</kbd>). Click through the task, then press <strong>Finish</strong>.
               </p>
             </>
           ) : (
@@ -135,6 +139,7 @@ export function Library() {
           })}
         </div>
       )}
+      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>
   )

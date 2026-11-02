@@ -4,6 +4,7 @@ import '../index.css'
 import { listGuides } from '../shared/db'
 import type { Guide, RecorderState } from '../shared/types'
 import { Icon, timeAgo } from '../editor/ui'
+import { usePlan } from '../editor/usePlan'
 
 const send = <T,>(msg: object) => chrome.runtime.sendMessage(msg) as Promise<T>
 const openEditor = (hash = '') => chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html${hash}`) })
@@ -15,6 +16,7 @@ function Popup() {
   const [busy, setBusy] = useState(false)
   const [canCapture, setCanCapture] = useState(true)
   const [video, setVideo] = useState(true)
+  const { plan } = usePlan()
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
@@ -42,7 +44,8 @@ function Popup() {
     <div className="p-4">
       <div className="mb-4 flex items-center gap-2">
         <img src="./icons/icon32.png" alt="" className="h-6 w-6" />
-        <span className="font-semibold">Scribe Capture</span>
+        <span className="font-semibold">StepCrumb</span>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${plan === 'Free' ? 'bg-amber-50 text-amber-800' : 'bg-green-100 text-green-800'}`}>{plan}</span>
         <button className="icon-btn ml-auto" onClick={() => openEditor()} title="Open library" aria-label="Open library">
           <Icon name="list" />
         </button>

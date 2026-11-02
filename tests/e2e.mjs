@@ -4,6 +4,8 @@
 import { chromium } from 'playwright-core'
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync } from 'node:fs'
+import JSZip from 'jszip'
+import { activateInSettings, fakeLicenseServer, TEST_KEY } from './license-helper.mjs'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -29,6 +31,7 @@ const ctx = await chromium.launchPersistentContext('', {
   args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`],
 })
 const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
+const licenseCalls = await fakeLicenseServer(ctx)
 const extId = new URL(sw.url()).host
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 const check = (cond, msg) => {
@@ -131,12 +134,52 @@ try {
 
   await editor.goto(`chrome-extension://${extId}/editor.html${new URL(editor.url()).hash.replace('/training', '')}`)
   await editor.waitForSelector('textarea[aria-label^="Step"]')
+
+  // ---------- Free plan ----------
+  check((await editor.getByRole('button', { name: 'Free · Upgrade' }).count()) === 1, 'free plan badge shown')
+  await editor.getByRole('button', { name: 'Export' }).click()
+  check((await editor.getByRole('button', { name: 'PDF (with StepCrumb footer)' }).count()) === 1, 'free PDF export is labelled as branded')
+  await editor.getByRole('button', { name: /HTML page/ }).click()
+  await editor.getByText('HTML export is included with a StepCrumb license.').waitFor()
+  check(true, 'free plan: HTML export is locked')
+  await editor.getByRole('button', { name: 'Export' }).click()
+  await editor.getByRole('button', { name: /Word \(\.docx\)/ }).click()
+  await editor.getByText('Word export is included with a StepCrumb license.').waitFor()
+  check(true, 'free plan: Word export is locked')
+  await editor.goto(editor.url() + '/preview')
+  const previewFrame = editor.frameLocator('iframe[title="Guide preview"]')
+  await previewFrame.locator('footer.brand').waitFor()
+  check((await previewFrame.locator('footer.brand').textContent()).includes('Made with StepCrumb'), 'free plan: guide (and its PDF) carries the StepCrumb footer')
+  await editor.goto(editor.url().replace('/preview', ''))
+  await editor.waitForSelector('textarea[aria-label^="Step"]')
+
+  // ---------- Paid plan ----------
+  await activateInSettings(editor, check)
+  check(licenseCalls.some((c) => c.path.endsWith('/activate') && c.key === TEST_KEY), 'activation called the license server')
   const dl = editor.waitForEvent('download')
   await editor.getByRole('button', { name: 'Export' }).click()
   await editor.getByRole('button', { name: 'HTML page' }).click()
   const file = await (await dl).path()
   const html = readFileSync(file, 'utf8')
   check(html.includes('Create a project in Projectly') && (html.match(/<figure class="shot">/g) ?? []).length === titles.length, 'HTML export has every step and screenshot')
+  check(!html.includes('Made with StepCrumb'), 'paid plan: no StepCrumb footer')
+  const wordDl = editor.waitForEvent('download')
+  await editor.getByRole('button', { name: 'Export' }).click()
+  await editor.getByRole('button', { name: 'Word (.docx)' }).click()
+  const word = await wordDl
+  check(word.suggestedFilename().endsWith('.docx'), 'paid plan: Word export downloads a .docx')
+  const zip = await JSZip.loadAsync(readFileSync(await word.path()))
+  const xml = await zip.file('word/document.xml').async('string')
+  const media = Object.keys(zip.files).filter((f) => f.startsWith('word/media/'))
+  check(xml.includes('Create a project in Projectly') && xml.includes('Q3 launch') && media.length === titles.length, `Word file has the steps and ${media.length} screenshots`)
+  // SOP as Word.
+  await editor.goto(editor.url() + '/sop')
+  const sopDl = editor.waitForEvent('download')
+  await editor.getByRole('button', { name: 'Export' }).click()
+  await editor.getByRole('button', { name: 'Word (.docx)' }).click()
+  const sopZip = await JSZip.loadAsync(readFileSync(await (await sopDl).path()))
+  const sopXml = await sopZip.file('word/document.xml').async('string')
+  check(sopXml.includes('Procedure') && sopXml.includes('<w:tbl>'), 'SOP exports to Word with its sections and table')
   await editor.goto(`chrome-extension://${extId}/editor.html#/`)
   await pause(1200)
   await editor.screenshot({ path: join(out, '6-library.png') })

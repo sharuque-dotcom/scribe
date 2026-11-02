@@ -4,6 +4,7 @@
 import { chromium } from 'playwright-core'
 import { createServer } from 'node:http'
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { activateInSettings, fakeLicenseServer } from './license-helper.mjs'
 import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
@@ -45,6 +46,7 @@ const extId = new URL((await workerOf(ctx)).url()).host
 await ctx.close()
 ctx = await launch([`--allowlisted-extension-id=${extId}`])
 const sw = await workerOf(ctx)
+await fakeLicenseServer(ctx)
 
 // Moves the mouse in steps, like a person, so there's a cursor path to follow.
 async function moveTo(page, selector) {
@@ -156,23 +158,45 @@ try {
   const vtt = readFileSync(await (await vttDl).path(), 'utf8')
   check(vtt.startsWith('WEBVTT') && vtt.includes('Type "sam@acme.io" into the "Work email" field') && vtt.includes('Now sign in.'), 'subtitle file has the captions and narration override')
 
-  // Export.
-  const t1 = Date.now()
-  const vidDl = editor.waitForEvent('download', { timeout: 600_000 })
-  await editor.getByRole('button', { name: 'Export video' }).click()
-  const dl = await vidDl
-  const file = join(out, dl.suggestedFilename())
-  await dl.saveAs(file)
-  console.log(`   exported ${dl.suggestedFilename()} in ${Math.round((Date.now() - t1) / 1000)}s`)
+  // ---------- Free plan ----------
+  const disabledVoices = await editor.locator('select[aria-label="Voice"] option[disabled]').count()
+  check(disabledVoices === 5, 'free plan: 1 voice included, 5 locked')
+  await editor.getByRole('button', { name: 'Background Dark' }).click()
+  await editor.getByText('More backgrounds is included with a StepCrumb license.').waitFor()
+  check(true, 'free plan: extra backgrounds are locked')
+  await editor.locator('canvas[aria-label="Video preview"]').screenshot({ path: join(out, 'v4-free-preview.png') })
+
   const { Input, BufferSource, ALL_FORMATS } = await import('mediabunny')
-  const input = new Input({ source: new BufferSource(readFileSync(file)), formats: ALL_FORMATS })
-  const vt = await input.getPrimaryVideoTrack()
-  const at = await input.getPrimaryAudioTrack()
-  const dur = await input.computeDuration()
-  console.log(`   ${vt.displayWidth}x${vt.displayHeight} ${await vt.getCodec()}, audio: ${at ? await at.getCodec() : 'none'}, ${dur.toFixed(1)}s`)
-  check(vt.displayWidth === 1920 && vt.displayHeight === 1080, 'exported at 1080p')
-  check(dur * 1000 > info.video.duration - 500, 'exported video is at least as long as the recording')
-  if (withVoice) check(!!at, 'exported video has the voiceover audio track')
+  async function exportAndRead(label, buttonName) {
+    const t = Date.now()
+    const done = editor.waitForEvent('download', { timeout: 600_000 })
+    await editor.getByRole('button', { name: buttonName, exact: true }).click()
+    const dl = await done
+    const file = join(out, `${label}-${dl.suggestedFilename()}`)
+    await dl.saveAs(file)
+    const input = new Input({ source: new BufferSource(readFileSync(file)), formats: ALL_FORMATS })
+    const vt = await input.getPrimaryVideoTrack()
+    const at = await input.getPrimaryAudioTrack()
+    const dur = await input.computeDuration()
+    console.log(`   ${label}: ${dl.suggestedFilename()} ${vt.displayWidth}x${vt.displayHeight} ${await vt.getCodec()}, audio: ${at ? await at.getCodec() : 'none'}, ${dur.toFixed(1)}s, ${Math.round((Date.now() - t) / 1000)}s to export`)
+    return { vt, at, dur }
+  }
+
+  const free = await exportAndRead('free', 'Export video (720p)')
+  check(free.vt.displayWidth === 1280 && free.vt.displayHeight === 720, 'free plan: video exports at 720p')
+  if (withVoice) check(!!free.at, 'free plan: voiceover included with the free voice')
+
+  // ---------- Paid plan ----------
+  await activateInSettings(editor, check)
+  check((await editor.locator('select[aria-label="Voice"] option[disabled]').count()) === 0, 'paid plan: all 6 voices unlocked')
+  await editor.getByRole('button', { name: 'Background Dark' }).click()
+  await pause(500)
+  await editor.locator('canvas[aria-label="Video preview"]').screenshot({ path: join(out, 'v5-paid-preview.png') })
+  await editor.getByRole('button', { name: 'Background Gradient' }).click()
+  const paid = await exportAndRead('paid', 'Export video')
+  check(paid.vt.displayWidth === 1920 && paid.vt.displayHeight === 1080, 'paid plan: video exports at 1080p')
+  check(paid.dur * 1000 > info.video.duration - 500, 'exported video is at least as long as the recording')
+  if (withVoice) check(!!paid.at, 'exported video has the voiceover audio track')
   await editor.screenshot({ path: join(out, 'v2-video-tab.png'), fullPage: true })
   console.log('\nAll video checks passed. Output in', out)
 } finally {

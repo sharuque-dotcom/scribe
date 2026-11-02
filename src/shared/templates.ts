@@ -102,7 +102,7 @@ The procedure is complete when the final step${last ? ` ("${last.title}")` : ''}
 
 | Version | Date | Author | Change |
 |---|---|---|---|
-| 1.0 | ${today()} | | First version, captured with Scribe |
+| 1.0 | ${today()} | | First version, captured with StepCrumb |
 `
 }
 

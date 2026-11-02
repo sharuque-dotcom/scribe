@@ -45,6 +45,8 @@ export interface FrameState {
   ripple: { x: number; y: number; age: number } | null
   caption: { text: string; alpha: number } | null
   redact: NRect[]
+  // Free plan: small "Made with StepCrumb" mark in the corner.
+  watermark?: boolean
 }
 
 export function redactAt(t: number, samples: RedactSample[]): NRect[] {
@@ -141,6 +143,28 @@ export function drawFrame(ctx: Ctx, L: Layout, bg: VideoBackground, frame: Canva
   ctx.restore()
 
   if (st.caption && st.caption.alpha > 0.01) drawCaption(ctx, L, st.caption.text, st.caption.alpha)
+  if (st.watermark) drawWatermark(ctx, L)
+}
+
+function drawWatermark(ctx: Ctx, L: Layout) {
+  const size = Math.round(20 * L.k)
+  const text = 'Made with StepCrumb'
+  ctx.save()
+  ctx.font = `600 ${size}px Inter, -apple-system, "Segoe UI", Roboto, sans-serif`
+  const padX = size * 0.7
+  const w = ctx.measureText(text).width + padX * 2
+  const h = size * 1.9
+  const m = Math.round(16 * L.k)
+  const x = L.vx + L.vw - w - m
+  const y = L.vy + m
+  ctx.globalAlpha = 0.8
+  ctx.fillStyle = 'rgba(15,23,42,0.75)'
+  roundRect(ctx, x, y, w, h, h / 2)
+  ctx.fill()
+  ctx.fillStyle = '#ffffff'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, x + padX, y + h / 2 + 1)
+  ctx.restore()
 }
 
 function drawCursor(ctx: Ctx, x: number, y: number, s: number) {

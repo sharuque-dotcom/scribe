@@ -11,6 +11,9 @@ export const VOICES: { id: string; label: string }[] = [
   { id: 'bm_george', label: 'George (UK, male)' },
 ]
 
+// The voice included in the free plan.
+export const FREE_VOICE = 'af_heart'
+
 export const clipKey = (voice: string, text: string) => `${voice}|${text.trim()}`
 export const clipMs = (c: VoiceClip) => Math.round((c.samples.length / c.sampleRate) * 1000)
 

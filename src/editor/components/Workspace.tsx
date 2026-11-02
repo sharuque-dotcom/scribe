@@ -11,6 +11,10 @@ import { useGuide } from '../useGuide'
 import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
 import { SettingsDialog } from './Settings'
+import { PlanBadge } from './PlanBadge'
+import { usePlan } from '../usePlan'
+import { lockedToast } from '../upgrade'
+import { guideDocx, toBlob } from '../../shared/docx'
 import { StepCard } from './StepCard'
 import { VideoView } from './VideoView'
 
@@ -46,6 +50,7 @@ async function fileToImage(file: File) {
 
 export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const { guide, images, update, addImage } = useGuide(id)
+  const { pro } = usePlan()
   const [annotating, setAnnotating] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastData | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -179,12 +184,14 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
     }
   }
 
-  const exportGuide = async (format: 'pdf' | 'html' | 'md' | 'json') => {
+  const exportGuide = async (format: 'pdf' | 'docx' | 'html' | 'md' | 'json') => {
     const name = slug(guide.title)
-    if (format === 'json') return download(`${name}.scribe.json`, await guideJson(guide), 'application/json')
+    if (format === 'json') return download(`${name}.stepcrumb.json`, await guideJson(guide), 'application/json')
+    if (!pro && format !== 'pdf') return setToast(lockedToast(format === 'docx' ? 'Word export' : format === 'md' ? 'Markdown export' : 'HTML export'))
     const r = await renderAll(guide, images)
+    if (format === 'docx') return download(`${name}.docx`, await toBlob(await guideDocx(guide, r)))
     if (format === 'md') return download(`${name}.md`, guideMarkdown(guide, r), 'text/markdown')
-    const html = wrapHtml(guide.title, guideBodyHtml(guide, r))
+    const html = wrapHtml(guide.title, guideBodyHtml(guide, r), { branded: !pro })
     if (format === 'html') download(`${name}.html`, html, 'text/html')
     else printHtml(html)
   }
@@ -238,7 +245,8 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
               </a>
             ))}
           </nav>
-          <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="AI settings" aria-label="AI settings">
+          <PlanBadge onOpen={() => setSettingsOpen(true)} />
+          <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings">
             <Icon name="settings" />
           </button>
           {(tab === 'steps' || tab === 'preview') && (
@@ -246,10 +254,11 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
               {(close) =>
                 (
                   [
-                    ['pdf', 'PDF (print / save as PDF)'],
+                    ['pdf', pro ? 'PDF (print / save as PDF)' : 'PDF (with StepCrumb footer)'],
+                    ['docx', 'Word (.docx)'],
                     ['html', 'HTML page'],
                     ['md', 'Markdown (.md)'],
-                    ['json', 'Scribe file (.json backup)'],
+                    ['json', 'StepCrumb file (.json backup)'],
                   ] as const
                 ).map(([f, label]) => (
                   <button
@@ -261,6 +270,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                     }}
                   >
                     {label}
+                    {!pro && (f === 'docx' || f === 'html' || f === 'md') && <span className="ml-auto text-xs" title="Paid plan">🔒</span>}
                   </button>
                 ))
               }
@@ -409,7 +419,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
       {tab === 'preview' && (
         <div className="mx-auto max-w-4xl px-4 pb-24 pt-6">
           {rendered ? (
-            <iframe title="Guide preview" className="h-[calc(100vh-8rem)] w-full rounded-xl border border-line bg-white shadow-soft" srcDoc={wrapHtml(guide.title, guideBodyHtml(guide, rendered))} />
+            <iframe title="Guide preview" className="h-[calc(100vh-8rem)] w-full rounded-xl border border-line bg-white shadow-soft" srcDoc={wrapHtml(guide.title, guideBodyHtml(guide, rendered), { branded: !pro })} />
           ) : (
             <p className="text-center text-muted">Rendering…</p>
           )}

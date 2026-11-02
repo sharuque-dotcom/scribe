@@ -4,10 +4,12 @@ import { download, slug } from '../../shared/export'
 import type { Guide, GuideVideo, Step, VideoBackground, ZoomSegment } from '../../shared/types'
 import { uid } from '../../shared/types'
 import { captionAlpha, drawFrame, layoutFor, outputSize, redactAt } from '../../shared/video/compose'
-import { exportVideo } from '../../shared/video/export'
+import { exportVideo, FREE_MAX_MS } from '../../shared/video/export'
 import { cameraAt, cueAt, planVideo, rippleAt, toSrt, toVtt, trackAt } from '../../shared/video/timeline'
-import { cachedClips, clipKey, clipMs, generateClips, VOICES, type GenerateProgress } from '../../shared/video/voice'
+import { cachedClips, clipKey, clipMs, FREE_VOICE, generateClips, VOICES, type GenerateProgress } from '../../shared/video/voice'
 import { Icon, type ToastData } from '../ui'
+import { lockedToast } from '../upgrade'
+import { usePlan } from '../usePlan'
 
 const fmt = (ms: number) => {
   const s = Math.max(0, ms) / 1000
@@ -48,7 +50,9 @@ export function VideoView({ guide, update, toast }: Props) {
 }
 
 function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVideo }) {
-  const settings = video.settings
+  const { pro } = usePlan()
+  // The free plan uses the Heart voice and the gradient background, whatever was saved.
+  const settings = pro ? video.settings : { ...video.settings, voiceName: FREE_VOICE, background: 'gradient' as const }
   const steps = guide.steps
   const [url, setUrl] = useState<string>()
   const [recording, setRecording] = useState<Blob>()
@@ -63,7 +67,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const abort = useRef<AbortController | null>(null)
 
   const patchVideo = useCallback((p: Partial<GuideVideo>) => update((g) => (g.video ? { ...g, video: { ...g.video, ...p } } : g)), [update])
-  const patchSettings = (p: Partial<GuideVideo['settings']>) => patchVideo({ settings: { ...settings, ...p } })
+  const patchSettings = (p: Partial<GuideVideo['settings']>) => patchVideo({ settings: { ...video.settings, ...p } })
 
   useEffect(() => {
     let objectUrl: string | undefined
@@ -117,9 +121,10 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
         ripple: rippleAt(src, steps),
         caption: cue ? { text: cue.text, alpha: captionAlpha(t, cue.start, cue.end) } : null,
         redact: redactAt(src, video.redact),
+        watermark: !pro,
       })
     },
-    [plan, layout, settings.background, settings.captions, steps, video.w, video.h, video.redact],
+    [plan, layout, settings.background, settings.captions, steps, video.w, video.h, video.redact, pro],
   )
 
   // Move the hidden video to the right moment, then draw.
@@ -292,7 +297,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
     abort.current = ctrl
     setExporting(0)
     try {
-      const res = await exportVideo({ recording, video, steps, plan, clips: settings.voice ? clips : {}, onProgress: setExporting, signal: ctrl.signal })
+      const res = await exportVideo({ recording, video: { ...video, settings }, steps, plan, clips: settings.voice ? clips : {}, onProgress: setExporting, signal: ctrl.signal, free: !pro })
       download(`${slug(guide.title)}.${res.ext}`, res.blob)
       toast({
         text: res.ext === 'mp4' ? 'Video exported as MP4.' : 'Saved as WebM: this browser can’t make MP4. Chrome on Windows or Mac makes MP4.',
@@ -440,7 +445,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
           <section className="card space-y-3 p-4 text-sm">
             <h3 className="font-semibold">Export</h3>
             <button className="btn-primary w-full" onClick={runExport} disabled={!recording || busy}>
-              <Icon name="download" /> {exporting !== null ? `Exporting… ${Math.round(exporting * 100)}%` : 'Export video'}
+              <Icon name="download" /> {exporting !== null ? `Exporting… ${Math.round(exporting * 100)}%` : pro ? 'Export video' : 'Export video (720p)'}
             </button>
             {exporting !== null && (
               <div>
@@ -460,7 +465,14 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 .vtt
               </button>
             </div>
-            <p className="text-xs text-muted">1080p, 30 fps. Captions and voice are built into the video; the subtitle files are for YouTube or a learning platform.</p>
+            <p className="text-xs text-muted">
+              {pro ? '1080p, 30 fps.' : 'Free plan: 720p with a small StepCrumb mark, up to 2 minutes.'} Captions and voice are built into the video; the subtitle files are for YouTube or a learning platform.
+            </p>
+            {!pro && plan.map.outDuration > FREE_MAX_MS && (
+              <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900" role="alert">
+                This video is {fmt(plan.map.outDuration)} long. Trim it to 2:00, or get a license for longer videos.
+              </p>
+            )}
           </section>
 
           <section className="card space-y-3 p-4 text-sm">
@@ -482,7 +494,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 value={settings.zoomScale}
                 onChange={(e) => {
                   const z = Number(e.target.value)
-                  patchVideo({ settings: { ...settings, zoomScale: z }, zooms: video.zooms?.map((s) => ({ ...s, scale: z })) })
+                  patchVideo({ settings: { ...video.settings, zoomScale: z }, zooms: video.zooms?.map((s) => ({ ...s, scale: z })) })
                 }}
                 className="w-full accent-indigo-600"
                 aria-label="Auto-zoom level"
@@ -499,13 +511,15 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 {BACKGROUNDS.map((b) => (
                   <button
                     key={b.id}
-                    onClick={() => patchSettings({ background: b.id })}
-                    title={b.label}
+                    onClick={() => (pro || b.id === 'gradient' ? patchSettings({ background: b.id }) : toast(lockedToast('More backgrounds')))}
+                    title={pro || b.id === 'gradient' ? b.label : `${b.label} (paid plan)`}
                     aria-label={`Background ${b.label}`}
                     aria-pressed={settings.background === b.id}
                     className={`h-8 flex-1 rounded-md border ${settings.background === b.id ? 'ring-2 ring-accent ring-offset-1' : 'border-line'}`}
                     style={{ background: b.css }}
-                  />
+                  >
+                    {!pro && b.id !== 'gradient' && <span className="text-xs">🔒</span>}
+                  </button>
                 ))}
               </div>
             </div>
@@ -519,11 +533,17 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             </label>
             <select className="input" value={settings.voiceName} onChange={(e) => patchSettings({ voiceName: e.target.value })} aria-label="Voice">
               {VOICES.map((v) => (
-                <option key={v.id} value={v.id}>
+                <option key={v.id} value={v.id} disabled={!pro && v.id !== FREE_VOICE}>
                   {v.label}
+                  {!pro && v.id !== FREE_VOICE ? ' 🔒' : ''}
                 </option>
               ))}
             </select>
+            {!pro && (
+              <button className="text-xs font-medium text-accent hover:underline" onClick={() => toast(lockedToast('All 6 voices'))}>
+                Unlock 5 more voices
+              </button>
+            )}
             {gen ? (
               <div className="space-y-1">
                 <div className="h-1.5 overflow-hidden rounded bg-raised">

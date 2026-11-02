@@ -1,5 +1,5 @@
 {
-  "name": "scribe",
+  "name": "stepcrumb",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
     "@mediabunny/aac-encoder": "^1.64.0",
+    "docx": "^9.15.1",
     "dompurify": "^3.4.17",
     "kokoro-js": "^1.2.1",
     "marked": "^18.1.1",
@@ -36,6 +37,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.13.0",
+    "jszip": "^3.10.2",
     "playwright-core": "^1.64.1",
     "postcss": "^8.5.31",
     "tailwindcss": "^3.4.19",

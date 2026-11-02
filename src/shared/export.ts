@@ -136,10 +136,21 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:.9em}
 @media print{body{background:#fff}main{padding:0;max-width:none}figure.shot img{box-shadow:none}h2{break-after:avoid}}
 `
 
-export function wrapHtml(title: string, body: string): string {
+export const BRAND_FOOTER = 'Made with StepCrumb · stepcrumb.com'
+
+// Free-plan documents carry a small "Made with StepCrumb" footer, repeated on
+// every printed page.
+const BRAND_CSS = `
+.brand{margin:40px 0 0;padding-top:12px;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;text-align:center}
+.brand b{color:#4f46e5}
+@media print{@page{margin-bottom:18mm}.brand{position:fixed;bottom:0;left:0;right:0;margin:0;padding:6px 0;background:#fff}}
+`
+
+export function wrapHtml(title: string, body: string, opts: { branded?: boolean } = {}): string {
+  const footer = opts.branded ? `<footer class="brand">Made with <b>StepCrumb</b> · stepcrumb.com</footer>` : ''
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(
     title,
-  )}</title><style>${DOC_CSS}</style></head><body><main>${body}</main></body></html>`
+  )}</title><style>${DOC_CSS}${opts.branded ? BRAND_CSS : ''}</style></head><body><main>${body}${footer}</main></body></html>`
 }
 
 // ---------- files ----------
@@ -186,7 +197,7 @@ export function printHtml(html: string) {
 // ---------- JSON backup ----------
 
 interface GuideFile {
-  format: 'scribe-guide'
+  format: 'stepcrumb-guide' | 'scribe-guide'
   version: 1
   guide: Guide
   images: StoredImage[]
@@ -195,15 +206,16 @@ interface GuideFile {
 export async function guideJson(guide: Guide): Promise<string> {
   const ids = guide.steps.map((s) => s.imageId).filter((x): x is string => !!x)
   const images = Object.values(await getImages(ids))
-  const file: GuideFile = { format: 'scribe-guide', version: 1, guide, images }
+  const file: GuideFile = { format: 'stepcrumb-guide', version: 1, guide, images }
   return JSON.stringify(file)
 }
 
 // Imports with fresh IDs so the same file can be imported more than once.
 export async function importGuideJson(text: string): Promise<Guide> {
   const file = JSON.parse(text) as GuideFile
-  if (file?.format !== 'scribe-guide' || !file.guide || !Array.isArray(file.guide.steps)) {
-    throw new Error('This file is not a Scribe guide export.')
+  // Older exports used the name 'scribe-guide'.
+  if ((file?.format !== 'stepcrumb-guide' && file?.format !== 'scribe-guide') || !file.guide || !Array.isArray(file.guide.steps)) {
+    throw new Error('This file is not a StepCrumb guide export.')
   }
   const idMap = new Map<string, string>()
   for (const img of file.images ?? []) {

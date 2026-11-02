@@ -1,4 +1,4 @@
-# Scribe
+# StepCrumb
 
 Click through any website and get a step-by-step guide with annotated screenshots, then turn it into an SOP or a training module.
 
@@ -44,7 +44,29 @@ While recording video there's no control bar on the page (it would end up in the
 
 *Improve steps with Claude* rewrites the title, description and every step in one go, using the screenshots to name buttons exactly. It can be undone.
 
-**Export.** You can export guides and documents as PDF (through the print dialog), a standalone HTML page, or Markdown with embedded images. Guides can also be saved as a `.scribe.json` backup and imported again.
+**Export.** You can export guides and documents as PDF (through the print dialog), a standalone HTML page, or Markdown with embedded images. Guides can also be saved as a `.stepcrumb.json` backup and imported again.
+
+## Free and paid
+
+| | Free | Paid (license key) |
+|---|---|---|
+| Guides, screenshots, auto-zoom, annotations, SOP/training templates | Unlimited | Unlimited |
+| PDF export | "Made with StepCrumb" footer | No branding |
+| Word / HTML / Markdown export | Locked | ✓ |
+| Video export | 720p, small watermark, up to 2 minutes | 1080p, no watermark, any length |
+| Voiceover | 1 voice (Heart) | All 6 voices |
+| Video backgrounds | Gradient | All |
+
+Licenses are [Lemon Squeezy](https://www.lemonsqueezy.com) license keys, entered in the editor's **Settings** (or via the **Free · Upgrade** badge). The key is checked when it's entered and then every 3 days; a paid plan keeps working offline for 14 days. Refunded or disabled keys go back to free at the next check.
+
+To connect your store, edit `LICENSE_CONFIG` at the top of `src/shared/license.ts`:
+
+- `buyUrl`: your pricing page (every "Get a license" link goes there)
+- `storeId` and `productIds`: from the Lemon Squeezy dashboard, so keys from other stores are rejected
+
+In Lemon Squeezy, turn on **license keys** for the product and set the activation limit (e.g. 3 browsers per key). Customers can free up an activation with **Remove license from this browser** in Settings.
+
+This is a local check, so a technical user could get around it. That's normal for software that runs entirely on the user's computer.
 
 ## Install
 
@@ -86,6 +108,8 @@ src/
     templates.ts    offline SOP and training documents
     ai.ts           Claude calls: step rewriting (structured JSON) and document writing (streamed)
     export.ts       HTML / Markdown / PDF / JSON
+    docx.ts         Word export for guides and SOP/training documents
+    license.ts      Lemon Squeezy license keys: activate, re-check, offline grace
     db.ts           IndexedDB storage (guides, screenshots, videos and voice clips kept separately)
     video/
       timeline.ts   zoom segments, camera path, smooth cursor, caption timing, voice freezes, subtitles
@@ -111,6 +135,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 `npm run e2e` loads the built extension in Chromium and checks two things:
 
 - **`tests/e2e.mjs`** captures a sign-in plus project-creation flow on a local test site. It checks the step text, merging, password redaction and screenshots, then exercises the annotator, the SOP and training templates, and HTML export.
+- Both browser tests run each flow twice, on the free plan and after activating a key against a fake Lemon Squeezy server (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
 - **`tests/e2e-ai.mjs`** runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
 
@@ -123,5 +148,4 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 - Video records one browser tab. Steps taken in other tabs or desktop apps appear in the guide but not in the video.
 - The free voice is generated on the user's computer: a few seconds per sentence, and about 90 MB downloaded the first time.
 - Narrated videos can run longer than the recording, because the video holds a frame until each line finishes. Click more slowly while recording, or shorten the narration lines.
-- There's no cloud sync or share link. Share by exporting PDF, HTML or Markdown, or send the `.scribe.json` file.
-- The desktop-app capture and team workspace features of the commercial Scribe product aren't included.
+- There's no cloud sync or share link. Share by exporting PDF, HTML or Markdown, or send the `.stepcrumb.json` file.
