@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { openCheckout } from '../checkout'
 import { CONFIG } from '../config'
 import { ChromeIcon, Logo } from './Top'
 
@@ -212,7 +213,7 @@ export function Pricing() {
                 <Check key={f}>{f}</Check>
               ))}
             </ul>
-            <a href={CONFIG.checkoutUrl} target="_blank" rel="noopener" className="btn-dark mt-8 w-full">
+            <a href={CONFIG.checkoutUrl} onClick={openCheckout} className="btn-dark mt-8 w-full">
               Get lifetime access
             </a>
             <p className="mt-3 text-center text-[12px] text-soft">Secure checkout by Polar. Your license key arrives by email.</p>
@@ -232,7 +233,7 @@ export function Pricing() {
               <Check key={f}>{f}</Check>
             ))}
           </ul>
-          <a href={CONFIG.checkoutUrl} target="_blank" rel="noopener" className="btn-ghost mt-8 w-full">
+          <a href={CONFIG.checkoutUrl} onClick={openCheckout} className="btn-ghost mt-8 w-full">
             Get Pro monthly or yearly
           </a>
         </div>
@@ -308,7 +309,7 @@ export function FinalCta() {
           <a href={CONFIG.chromeStoreUrl} className="btn bg-white px-7 py-3.5 text-[16px] text-ink hover:-translate-y-0.5 hover:shadow-float">
             <ChromeIcon /> Add to Chrome, it's free
           </a>
-          <a href="#pricing" className="btn border border-white/80 px-7 py-3.5 text-[16px] text-white hover:bg-white hover:text-ink">
+          <a href={CONFIG.checkoutUrl} onClick={openCheckout} className="btn border border-white/80 px-7 py-3.5 text-[16px] text-white hover:bg-white hover:text-ink">
             Lifetime · ${CONFIG.founding.price}
           </a>
         </div>
