@@ -5,14 +5,14 @@
 // and everything else stored locally are never touched.
 
 export const LICENSE_CONFIG = {
-  // Polar → Settings → Organization ID. Fill this in before release.
-  organizationId: '',
+  // Polar → Settings → Organization ID.
+  organizationId: '74c0856f-0a68-4222-a3a4-800dffb0afac',
   // Polar organization slug, used for the customer portal link.
   orgSlug: 'stepcrumb',
   // One checkout for all three plans.
   checkoutUrl: 'https://buy.polar.sh/polar_cl_ImqGIEAjftim5l45evDJ9hyB5WhthHn6747Pn1IkbMt',
   keyPrefix: 'STEPCRUMB',
-  // Set the same limit on the License key benefit in Polar.
+  // Matches the License key benefit in Polar (customers remove computers in the portal).
   activations: 2,
   supportEmail: 'hello@stepcrumb.com',
   api: 'https://api.polar.sh/v1/customer-portal/license-keys',
@@ -49,8 +49,6 @@ export const planName = (lic: License | null, now = Date.now()) => (isPro(lic, n
 // ---------- storage (chrome.storage in the extension, localStorage otherwise) ----------
 
 const KEY = 'stepcrumb.license'
-// Test builds can point at a test organization before the real ID is filled in.
-const DEV_ORG_KEY = 'stepcrumb.devOrgId'
 const memory = new Map<string, string>()
 const hasChromeStorage = () => typeof chrome !== 'undefined' && !!chrome.storage?.local
 
@@ -100,11 +98,7 @@ export function onLicenseChange(fn: () => void): () => void {
   return () => typeof window !== 'undefined' && window.removeEventListener('storage', l)
 }
 
-async function organizationId(): Promise<string> {
-  if (LICENSE_CONFIG.organizationId) return LICENSE_CONFIG.organizationId
-  if (!hasChromeStorage()) return ''
-  return ((await chrome.storage.local.get(DEV_ORG_KEY))[DEV_ORG_KEY] as string) ?? ''
-}
+const organizationId = async () => LICENSE_CONFIG.organizationId
 
 // ---------- Polar calls ----------
 
@@ -178,7 +172,9 @@ export async function activateLicense(input: string, f: Fetch = fetch, now = Dat
   else if (act.status === 403) {
     const detail = detailText(act.data)
     if (/limit/i.test(detail)) {
-      throw new Error(`This key is already in use on ${LICENSE_CONFIG.activations} computers. To move it here, email ${LICENSE_CONFIG.supportEmail}.`)
+      throw new Error(
+        `This key is already used on ${LICENSE_CONFIG.activations} computers. Remove one in your Polar portal (${portalUrl()}), then try again. Need help? ${LICENSE_CONFIG.supportEmail}`,
+      )
     }
     // Otherwise the key may simply not use activations; the check below decides.
   } else if (act.status >= 500 || act.status === 429) throw new Error('The license server is busy. Please try again in a minute.')

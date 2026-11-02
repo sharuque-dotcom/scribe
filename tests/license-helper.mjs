@@ -1,7 +1,8 @@
 // Test helpers: a fake Polar license API, and activating a key through the
 // editor's Settings dialog, so tests can check the Free and Pro plans.
 export const TEST_KEY = 'STEPCRUMB-TEST-1234-ABCD'
-export const TEST_ORG = '11111111-2222-4333-8444-555555555555'
+// The real organization ID (the fake server below answers for it).
+export const TEST_ORG = '74c0856f-0a68-4222-a3a4-800dffb0afac'
 
 // Answers Polar's customer-portal license key endpoints. `server.revoke()` makes
 // the key invalid from then on (a cancelled or lapsed subscription).
@@ -24,14 +25,8 @@ export async function fakeLicenseServer(ctx) {
   return { calls, revoke: () => (revoked = true) }
 }
 
-// Points the build at the test organization (the real ID isn't filled in during tests).
-export async function useTestOrg(page) {
-  await page.evaluate((org) => chrome.storage.local.set({ 'stepcrumb.devOrgId': org }), TEST_ORG)
-}
-
 // Opens Settings from the plan badge, tries a wrong key, then the right one.
 export async function activateInSettings(page, check) {
-  await useTestOrg(page)
   await page.getByRole('button', { name: 'Free · Upgrade' }).click()
   check((await page.getByRole('button', { name: 'Upgrade to Pro' }).count()) >= 1, 'license screen offers Upgrade to Pro')
   await page.getByLabel('License key').fill('WRONG-KEY')

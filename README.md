@@ -71,9 +71,8 @@ All of this is decided in one file, `src/shared/plans.ts`: each Pro feature is l
 
 **Setup before release** (`LICENSE_CONFIG` at the top of `src/shared/license.ts`):
 
-- `organizationId`: from Polar → Settings. Until it's filled in, the key screen says licensing isn't set up.
-- `orgSlug`: your Polar organization slug (used for the portal link).
-- In Polar, give each product a **License key** benefit with prefix `STEPCRUMB` and an **activation limit of 2** (one person, two computers). To move a key to a new computer, the customer emails `supportEmail` and you remove an activation in Polar.
+- `organizationId` (filled in) and `orgSlug` (`stepcrumb`, used for the portal link): from Polar → Settings.
+- In Polar, one **License key** benefit (prefix `STEPCRUMB`, **activation limit 2**, never expires) is attached to Lifetime, Monthly and Yearly. Customers remove old computers themselves in the Polar portal; a removed computer drops to Free at its next check.
 
 **Network.** The license check is the only request StepCrumb makes, apart from the one-time voice model download from Hugging Face (public model files only). The license check sends only the key, the organization ID and the computer's activation. Nothing captured ever leaves the device.
 

@@ -45,13 +45,7 @@ export function LicenseSection() {
         )}
         <p className="mt-0.5 font-mono text-xs text-green-900/70">{maskKey(license.key)}</p>
         <p className="mt-2 text-xs">{manage}</p>
-        <p className="mt-2 text-xs text-green-900/70">
-          Each license works on {LICENSE_CONFIG.activations} computers. Moving to a new one? Email{' '}
-          <a className="underline" href={`mailto:${LICENSE_CONFIG.supportEmail}?subject=Move%20my%20StepCrumb%20license`}>
-            {LICENSE_CONFIG.supportEmail}
-          </a>
-          .
-        </p>
+        <p className="mt-2 text-xs text-green-900/70">Works on {LICENSE_CONFIG.activations} computers. Moving to a new one? Remove the old one under Manage subscription.</p>
       </section>
     )
   }
@@ -60,7 +54,7 @@ export function LicenseSection() {
       {lapsed ? (
         <div className="mb-3 rounded-md bg-amber-50 p-2.5 text-amber-900" role="status">
           <p className="font-semibold">Your Pro access has ended</p>
-          <p className="text-xs">The subscription was cancelled or has lapsed, so StepCrumb is back on the free plan. Your guides and videos are safe on this computer.</p>
+          <p className="text-xs">Pro is no longer active on this computer: the subscription ended, or this computer was removed from your license. StepCrumb is back on the free plan, and your guides and videos are safe here.</p>
           <p className="mt-1 text-xs">{manage}</p>
         </div>
       ) : (

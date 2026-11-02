@@ -74,7 +74,7 @@ describe('activateLicense', () => {
   })
   it('explains the computer limit', async () => {
     const f = polar({ activate: [403, { error: 'NotPermitted', detail: 'License key activation limit already reached' }] })
-    await expect(activateLicense(KEY, asFetch(f))).rejects.toThrow('already in use on 2 computers')
+    await expect(activateLicense(KEY, asFetch(f))).rejects.toThrow('already used on 2 computers')
   })
   it('says when a key is unknown', async () => {
     const f = polar({ activate: [404, { error: 'ResourceNotFound', detail: 'License key not found' }] })
