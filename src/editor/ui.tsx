@@ -36,6 +36,11 @@ const PATHS: Record<string, string> = {
   video: 'M3 6h12v12H3zM15 10l6-3v10l-6-3',
   play: 'M7 4l13 8-13 8z',
   pause: 'M7 4h3v16H7zM14 4h3v16h-3z',
+  search: 'M11 11m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M20 20l-3.5-3.5',
+  sort: 'M4 7h16M7 12h10M10 17h4',
+  grid: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',
+  more: 'M5 12h.01M12 12h.01M19 12h.01',
+  file: 'M7 3h7l5 5v13H7zM14 3v5h5',
 }
 
 export function Icon({ name, className = 'h-4 w-4' }: { name: keyof typeof PATHS | string; className?: string }) {
@@ -152,5 +157,7 @@ export function timeAgo(t: number): string {
   if (m < 60) return `${m} min ago`
   const h = Math.round(m / 60)
   if (h < 24) return `${h} h ago`
-  return new Date(t).toLocaleDateString()
+  const d = new Date(t)
+  // "Nov 1", or "Nov 1, 2025" for another year.
+  return d.toLocaleDateString(undefined, d.getFullYear() === new Date().getFullYear() ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' })
 }

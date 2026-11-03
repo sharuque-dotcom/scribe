@@ -87,7 +87,7 @@ try {
   const page = await ctx.newPage()
   await page.goto(`chrome-extension://${extId}/editor.html#/`)
   await page.evaluate(() => localStorage.setItem('scribe.ai', JSON.stringify({ apiKey: 'sk-ant-test', includeScreenshots: true, audience: 'new sales reps', tone: 'friendly' })))
-  await page.getByRole('button', { name: 'Open a sample guide' }).click()
+  await page.getByRole('button', { name: 'Open a sample' }).click()
   await page.waitForSelector('textarea[aria-label^="Step"]')
   await page.waitForTimeout(1200)
   await page.locator('[id^=step-]').nth(5).scrollIntoViewIfNeeded()

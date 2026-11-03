@@ -382,13 +382,25 @@ async function ensureContentScript(tabId: number) {
   }
 }
 
-async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean; source?: 'tab' | 'pick' } = {}): Promise<RecorderState> {
+// fromLibrary: started from the library page, so record the website they were
+// last on (brought back to the front) rather than the library itself.
+async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean; source?: 'tab' | 'pick'; fromLibrary?: boolean } = {}): Promise<RecorderState> {
   const mode: CaptureMode = opts.mode ?? (opts.video ? 'both' : 'screenshots')
   const current = await getState()
   if (current.recording) return current
   // The page they're working on: the active tab of their last-used browser window.
   const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null)
-  const [tab] = await chrome.tabs.query(win?.id !== undefined ? { active: true, windowId: win.id } : { active: true, lastFocusedWindow: true })
+  let [tab] = await chrome.tabs.query(win?.id !== undefined ? { active: true, windowId: win.id } : { active: true, lastFocusedWindow: true })
+  if (opts.fromLibrary && !(tab?.url && /^https?:/.test(tab.url))) {
+    const web = (await chrome.tabs.query({ windowType: 'normal' })).filter((t) => t.url && /^https?:/.test(t.url))
+    const last = web.sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0]
+    if (!last?.id) {
+      await setState({ ...IDLE, notice: 'Open the website you want to document in a tab first, then start again.' })
+      return getState()
+    }
+    await chrome.windows.update(last.windowId, { focused: true }).catch(() => {})
+    tab = await chrome.tabs.update(last.id, { active: true }) ?? last
+  }
   const now = Date.now()
   const guide: Guide = {
     id: uid(),
@@ -541,7 +553,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'getState':
         return getState()
       case 'start':
-        return start(msg.title, { mode: msg.mode as CaptureMode | undefined, video: !!msg.video, source: msg.source as 'tab' | 'pick' | undefined })
+        return start(msg.title, { mode: msg.mode as CaptureMode | undefined, video: !!msg.video, source: msg.source as 'tab' | 'pick' | undefined, fromLibrary: !!msg.fromLibrary })
       case 'video-blank':
         return videoNotice("The recording looks blank. On a Mac: open System Settings → Privacy & Security → Screen Recording, turn on Google Chrome, then quit Chrome (Cmd+Q) and reopen it. Or pick a Chrome tab instead.")
       case 'video-ended':
