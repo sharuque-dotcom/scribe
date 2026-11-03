@@ -123,7 +123,7 @@ export async function exportVideo(opts: {
         cursor: plan.tracks.hasCursor ? trackAt(plan.tracks.cursor, plan.tracks.n, src) : null,
         ripple: rippleAt(src, steps),
         caption: cue ? { text: cue.text, alpha: captionAlpha(out, cue.start, cue.end) } : null,
-        redact: redactAt(src, video.redact),
+        redact: [...redactAt(src, video.redact), ...(settings.autoBlur === false ? [] : redactAt(src, video.pii ?? []))],
         watermark: limits.watermark,
       })
       await videoSource.add(out / 1000, 1 / FPS)

@@ -76,7 +76,7 @@ try {
   const titles = await editor.$$eval('textarea[aria-label$="text"]', (els) => els.map((e) => e.value))
   console.log('captured steps:\n  ' + titles.join('\n  '))
   check(titles[0].startsWith('Go to localhost:4173/login.html'), 'first step is the starting page')
-  check(titles.includes('Type "sam@acme.io" into the "Work email" field'), 'click + typing merged into one step')
+  check(titles.includes('Type an email address into the "Work email" field'), 'click + typing merged into one step')
   check(titles.includes('Enter your password in the "Password" field'), 'password value is never written')
   check(!titles.join(' ').includes('hunter2'), 'password text does not appear anywhere')
 

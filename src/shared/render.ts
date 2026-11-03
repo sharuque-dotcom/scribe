@@ -197,10 +197,11 @@ function pixelate(
   X: (x: number) => number,
   Y: (y: number) => number,
 ) {
+  // Trim to the visible area (a zoomed view may cut the box), keeping its edges.
   const x = Math.max(0, Math.floor(X(r.x)))
   const y = Math.max(0, Math.floor(Y(r.y)))
-  const w = Math.min(canvas.width - x, Math.ceil(X(r.x + r.w) - X(r.x)))
-  const h = Math.min(canvas.height - y, Math.ceil(Y(r.y + r.h) - Y(r.y)))
+  const w = Math.min(canvas.width, Math.ceil(X(r.x + r.w))) - x
+  const h = Math.min(canvas.height, Math.ceil(Y(r.y + r.h))) - y
   if (w <= 0 || h <= 0) return
   pixelateBox(ctx, canvas, { x, y, w, h })
 }

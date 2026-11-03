@@ -130,11 +130,11 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
         cursor: plan.tracks.hasCursor ? trackAt(plan.tracks.cursor, plan.tracks.n, src) : null,
         ripple: rippleAt(src, steps),
         caption: cue ? { text: cue.text, alpha: captionAlpha(t, cue.start, cue.end) } : null,
-        redact: redactAt(src, video.redact),
+        redact: [...redactAt(src, video.redact), ...(settings.autoBlur === false ? [] : redactAt(src, video.pii ?? []))],
         watermark: limits.watermark,
       })
     },
-    [plan, layout, settings.background, settings.captions, steps, video.w, video.h, video.redact, limits.watermark],
+    [plan, layout, settings.background, settings.captions, steps, video.w, video.h, video.redact, video.pii, settings.autoBlur, limits.watermark],
   )
 
   // Move the hidden video to the right moment, then draw.
@@ -579,6 +579,15 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
               <input type="checkbox" checked={drawsSmoothCursor(video)} onChange={(e) => patchSettings({ smoothCursor: e.target.checked })} className="accent-indigo-600" aria-label="Smooth cursor" />
             </label>
             {recordingHasPointer(video) && drawsSmoothCursor(video) && <p className="-mt-2 text-xs text-amber-700">This recording already shows your mouse pointer, so you’ll see two.</p>}
+            {(video.pii ?? []).some((p) => p.rects.length > 0) && (
+              <>
+                <label className="flex items-center justify-between gap-3">
+                  <span>Blur personal details</span>
+                  <input type="checkbox" checked={settings.autoBlur !== false} onChange={(e) => patchSettings({ autoBlur: e.target.checked })} className="accent-indigo-600" aria-label="Blur personal details" />
+                </label>
+                <p className="-mt-2 text-xs text-muted">Emails, phone numbers and IDs auto-blur found on screen.</p>
+              </>
+            )}
             <label className="flex items-center justify-between gap-3">
               <span>Captions</span>
               <input type="checkbox" checked={settings.captions} onChange={(e) => patchSettings({ captions: e.target.checked })} className="accent-indigo-600" aria-label="Captions" />

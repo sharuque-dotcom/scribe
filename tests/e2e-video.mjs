@@ -198,7 +198,7 @@ try {
   const vttDl = editor.waitForEvent('download')
   await editor.getByRole('button', { name: '.vtt' }).click()
   const vtt = readFileSync(await (await vttDl).path(), 'utf8')
-  check(vtt.startsWith('WEBVTT') && vtt.includes('Type "sam@acme.io" into the "Work email" field') && vtt.includes('Now sign in.'), 'subtitle file has the captions and narration override')
+  check(vtt.startsWith('WEBVTT') && vtt.includes('Type an email address into the "Work email" field') && vtt.includes('Now sign in.'), 'subtitle file has the captions and narration override')
 
   // ---------- Free plan ----------
   const disabledVoices = await editor.locator('select[aria-label="Voice"] option[disabled]').count()

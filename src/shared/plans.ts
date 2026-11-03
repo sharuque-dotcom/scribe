@@ -14,6 +14,7 @@ const DEFINITIONS = {
   videoNoWatermark: { tier: 'pro' as Tier, label: 'Video without the StepCrumb mark' },
   videoAnyLength: { tier: 'pro' as Tier, label: 'Videos longer than 5 minutes' },
   customHighlight: { tier: 'pro' as Tier, label: 'Your own highlight colour (e.g. your brand colour)' },
+  autoBlurWords: { tier: 'pro' as Tier, label: 'Auto-blur your own words and patterns (names, record numbers)' },
   allVoices: { tier: 'pro' as Tier, label: 'All voices' },
   allBackgrounds: { tier: 'pro' as Tier, label: 'All video backgrounds' },
 } satisfies Record<string, { tier: Tier; label: string }>

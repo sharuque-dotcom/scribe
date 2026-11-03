@@ -3,6 +3,8 @@
 import { estimateOrigin, monitorOffset, toVideoPoint, toVideoRect, type ScreenGeom } from '../shared/coords'
 import { cleanLabel, looksSensitive } from '../shared/describe'
 import type { CapturedEvent, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
+import { loadAutoBlur, onAutoBlurChange } from '../shared/autoblur'
+import { customRules, DEFAULT_AUTO_BLUR, findPii, type AutoBlurSettings } from '../shared/pii'
 
 declare global {
   interface Window {
@@ -21,6 +23,18 @@ function init() {
   const recordedValues = new WeakMap<Element, string>()
 
   const bar = createBar()
+
+  // Auto-blur: personal details shown on the page (emails, phone numbers, …).
+  let autoBlur: AutoBlurSettings = DEFAULT_AUTO_BLUR
+  let customRe: RegExp[] = []
+  const loadBlur = () =>
+    loadAutoBlur().then((s) => {
+      autoBlur = s
+      customRe = customRules(s.custom)
+    })
+  void loadBlur()
+  onAutoBlurChange(() => void loadBlur())
+  const piiNow = () => piiRects(autoBlur, customRe, (n) => bar.owns(n))
   // Identifies this page (document), so the background can tell whether a
   // screenshot shows the page an event happened on.
   const pageId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
@@ -77,7 +91,7 @@ function init() {
       // Also report secret fields as they are right now, since the user may
       // have typed since the click.
       bar.hold(500)
-      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), page: pageId, seq })))
+      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), piiRects: piiNow(), page: pageId, seq })))
       return true
     }
   })
@@ -132,7 +146,8 @@ function init() {
     const batch = samples
     samples = []
     const rects = sensitiveRects().map((r) => vRectFromPage(r) ?? r)
-    chrome.runtime.sendMessage({ type: 'cursor', samples: batch, rects, at: Date.now() }).catch(() => {})
+    const pii = piiNow().map((r) => vRectFromPage(r) ?? r)
+    chrome.runtime.sendMessage({ type: 'cursor', samples: batch, rects, pii, at: Date.now() }).catch(() => {})
   }, 500)
 
   async function send(event: CapturedEvent) {
@@ -262,6 +277,7 @@ function init() {
       vRect: vRectFromPage(targetRect),
       vLabel: vRectFromPage(labelRect),
       redactRects: sensitiveRects(),
+      piiRects: piiNow(),
       elementKey: elementKey(el),
       url: location.href,
       page: pageId,
@@ -406,6 +422,44 @@ function sensitiveRects(): NRect[] {
     if (r.width <= 0 || r.height <= 0 || r.bottom < 0 || r.top > innerHeight) return
     out.push({ x: r.left / innerWidth, y: r.top / innerHeight, w: r.width / innerWidth, h: r.height / innerHeight })
   })
+  return out
+}
+
+// Where personal details (emails, phone numbers, IDs, …) show on screen, as
+// 0..1 of the viewport, read from the page's text and the values in its fields.
+// Only the detail itself is covered, not the whole line.
+function piiRects(settings: AutoBlurSettings, custom: RegExp[], ours: (n: Node) => boolean): NRect[] {
+  if (!settings.on || !document.body) return []
+  const out: NRect[] = []
+  const pad = 2
+  const push = (r: DOMRect) => {
+    if (r.width <= 0 || r.height <= 0 || r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return
+    out.push({ x: (r.left - pad) / innerWidth, y: (r.top - pad) / innerHeight, w: (r.width + pad * 2) / innerWidth, h: (r.height + pad * 2) / innerHeight })
+  }
+  try {
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        const p = n.parentElement
+        if (!p || /^(SCRIPT|STYLE|NOSCRIPT|TEXTAREA|OPTION)$/.test(p.tagName) || ours(p)) return NodeFilter.FILTER_REJECT
+        return (n.nodeValue?.length ?? 0) >= 5 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+      },
+    })
+    const range = document.createRange()
+    let seen = 0
+    for (let n = walker.nextNode(); n && seen < 6000; n = walker.nextNode(), seen++) {
+      for (const m of findPii(n.nodeValue!, settings, custom)) {
+        range.setStart(n, m.start)
+        range.setEnd(n, m.end)
+        for (const r of Array.from(range.getClientRects())) push(r)
+      }
+    }
+    // Values typed into (or shown in) fields: cover the field.
+    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input:not([type=hidden]):not([type=password]), textarea').forEach((el) => {
+      if (el.value && findPii(el.value, settings, custom).length) push(el.getBoundingClientRect())
+    })
+  } catch {
+    // A page we can't read: nothing extra to blur.
+  }
   return out
 }
 

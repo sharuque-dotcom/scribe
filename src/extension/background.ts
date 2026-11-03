@@ -4,6 +4,8 @@ import { describeEvent, shouldMerge } from '../shared/describe'
 import { recheckLicense } from '../shared/license'
 import { pixelateRects } from '../shared/redact'
 import { pickedSource } from '../shared/coords'
+import { loadAutoBlur } from '../shared/autoblur'
+import { maskPii, PII_PHRASE, wholePii } from '../shared/pii'
 import { deleteChunks, deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
 import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
@@ -41,6 +43,8 @@ interface Shot {
   w: number
   h: number
   redact?: NRect[]
+  // Personal details on screen (auto-blur): blur boxes, not baked into the image.
+  pii?: NRect[]
   // Which page (document) was showing, and its change counter, as reported by that page.
   page?: string
   seq?: number
@@ -48,13 +52,13 @@ interface Shot {
 
 // Ask the page to hide the capture bar and say which page it is. A page that
 // is navigating away won't answer, so don't wait long.
-async function prepare(tabId: number | undefined): Promise<{ redactRects?: NRect[]; page?: string; seq?: number } | undefined> {
+async function prepare(tabId: number | undefined): Promise<{ redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number } | undefined> {
   if (tabId === undefined) return undefined
   const reply = await Promise.race([
     chrome.tabs.sendMessage(tabId, { type: 'prepareCapture' }).catch(() => undefined),
     sleep(150).then(() => undefined),
   ])
-  return reply as { redactRects?: NRect[]; page?: string; seq?: number } | undefined
+  return reply as { redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number } | undefined
 }
 
 async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
@@ -79,7 +83,7 @@ async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRec
         dataUrl = await blobToDataUrl(await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 }))
       }
       bmp.close()
-      return { dataUrl, ...size, redact, page: reply?.page, seq: reply?.seq }
+      return { dataUrl, ...size, redact, pii: reply?.piiRects, page: reply?.page, seq: reply?.seq }
     } catch (err) {
       if (attempt >= 3) throw err
     }
@@ -193,6 +197,29 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number, p
   if (shot && imageId) await putImage({ id: imageId, dataUrl: shot.dataUrl, w: shot.w, h: shot.h })
 
   const now = Date.now()
+  // Auto-blur: personal details on the screenshot get blur boxes (removable in
+  // the editor), and stay out of the step text, captions and voice.
+  const blurPrefs = await loadAutoBlur()
+  const autoBlurs: Annotation[] = (shots ? shot?.pii ?? event.piiRects ?? [] : []).map((r) => ({
+    id: uid(),
+    type: 'blur',
+    x1: r.x,
+    y1: r.y,
+    x2: r.x + r.w,
+    y2: r.y + r.h,
+    color: '#000000',
+    auto: true,
+  }))
+  if (event.value && (event.action === 'type' || event.action === 'select')) {
+    const whole = wholePii(event.value, blurPrefs)
+    event = whole ? { ...event, value: undefined, valuePhrase: PII_PHRASE[whole] } : { ...event, value: maskPii(event.value, blurPrefs) }
+  }
+  event = {
+    ...event,
+    target: { ...event.target, label: maskPii(event.target.label, blurPrefs) },
+    url: event.url && maskPii(event.url, blurPrefs),
+    pageTitle: event.pageTitle && maskPii(event.pageTitle, blurPrefs),
+  }
   const blurs: Annotation[] = (shots ? redact ?? event.redactRects : []).map((r) => ({
     id: uid(),
     type: 'blur',
@@ -219,7 +246,7 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number, p
     vRect: event.vRect,
     vLabel: event.vLabel,
     showAutoHighlight: event.action !== 'key' && event.action !== 'navigate',
-    annotations: blurs,
+    annotations: [...blurs, ...autoBlurs],
     elementKey: event.elementKey,
     createdAt: now,
   }
@@ -346,29 +373,39 @@ async function stopVideo(rec: VideoRecording, videoId: string | null, redact: Re
 // They're kept in memory and written to the guide every few seconds and at the end.
 let cursorBuf: CursorSample[] = []
 let redactBuf: RedactSample[] = []
+let piiBuf: RedactSample[] = []
+// The last personal-detail sample sent, so unchanged ones aren't stored again.
+let lastPii: RedactSample | null = null
 let lastFlush = 0
 
 async function flushTracks(force = false) {
   if (!force && Date.now() - lastFlush < 5000) return
   lastFlush = Date.now()
-  if (!cursorBuf.length && !redactBuf.length) return
+  if (!cursorBuf.length && !redactBuf.length && !piiBuf.length) return
   const state = await getState()
   const guide = state.guideId ? await getGuide(state.guideId) : undefined
   if (!guide?.video) return
   guide.video.cursor.push(...cursorBuf)
   guide.video.redact.push(...redactBuf)
+  if (piiBuf.length) guide.video.pii = [...(guide.video.pii ?? []), ...piiBuf]
   cursorBuf = []
   redactBuf = []
+  piiBuf = []
   await putGuide(guide)
 }
 
-async function addTracks(samples: CursorSample[], rects: NRect[], at: number) {
+async function addTracks(samples: CursorSample[], rects: NRect[], at: number, pii: NRect[] = []) {
   const state = await getState()
   if (!state.recording || state.paused || !state.rec) return
   for (const s of samples) cursorBuf.push({ t: videoTime(state, s.t), x: s.x, y: s.y })
   const prev = redactBuf[redactBuf.length - 1]
   // Only store a new entry when the secret fields moved or changed.
   if (!prev || JSON.stringify(prev.rects) !== JSON.stringify(rects)) redactBuf.push({ t: videoTime(state, at), rects })
+  const prevPii = piiBuf[piiBuf.length - 1] ?? lastPii
+  if (!prevPii || JSON.stringify(prevPii.rects) !== JSON.stringify(pii)) {
+    lastPii = { t: videoTime(state, at), rects: pii }
+    piiBuf.push(lastPii)
+  }
   await flushTracks()
 }
 
@@ -404,7 +441,7 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
   const now = Date.now()
   const guide: Guide = {
     id: uid(),
-    title: title?.trim() || (tab?.title ? `How to use ${tab.title}` : 'Untitled guide'),
+    title: title?.trim() || (tab?.title ? `How to use ${maskPii(tab.title, await loadAutoBlur())}` : 'Untitled guide'),
     description: '',
     createdAt: now,
     updatedAt: now,
@@ -440,6 +477,8 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
     guide.video = { blobId: video.id, source: video.source, cursorInVideo: !!video.viaDialog, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
     cursorBuf = []
     redactBuf = []
+    piiBuf = []
+    lastPii = null
   }
   await putGuide(guide)
   const state: RecorderState = {
@@ -525,6 +564,8 @@ async function discard(): Promise<RecorderState> {
   if (rec) await stopVideo(rec, null)
   cursorBuf = []
   redactBuf = []
+  piiBuf = []
+  lastPii = null
   await setState(IDLE)
   if (guideId) await deleteGuide(guideId)
   return IDLE
@@ -565,7 +606,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'desktop-ping':
         return null
       case 'cursor':
-        return addTracks(msg.samples as CursorSample[], msg.rects as NRect[], msg.at as number)
+        return addTracks(msg.samples as CursorSample[], msg.rects as NRect[], msg.at as number, (msg.pii as NRect[] | undefined) ?? [])
       case 'stop':
         return stop(msg.openEditor !== false)
       case 'togglePause':

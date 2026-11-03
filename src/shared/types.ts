@@ -26,6 +26,8 @@ export interface Annotation {
   y2: number
   color: string
   text?: string
+  // Added by auto-blur (a personal detail on screen). Can be removed like any other.
+  auto?: boolean
 }
 
 export type StepAction = 'click' | 'type' | 'select' | 'key' | 'navigate' | 'manual'
@@ -138,6 +140,8 @@ export interface VideoSettings {
   background: VideoBackground
   // Draw StepCrumb's smooth cursor. Unset: only when the recording has no pointer of its own.
   smoothCursor?: boolean
+  // Blur the personal details auto-blur found. Unset means on.
+  autoBlur?: boolean
 }
 
 export type RecordSource = 'tab' | 'window' | 'screen'
@@ -158,6 +162,9 @@ export interface GuideVideo {
   h: number
   cursor: CursorSample[]
   redact: RedactSample[]
+  // Personal details on screen over time (auto-blur). Blurred when the video is
+  // shown or exported, unless switched off in the Video tab; the saved file keeps them.
+  pii?: RedactSample[]
   // Unset means zooms are worked out automatically from the clicks.
   zooms?: ZoomSegment[]
   trimStart: number
@@ -192,12 +199,16 @@ export interface CapturedEvent {
   action: StepAction
   target: TargetInfo
   value?: string
+  // The value is one personal detail: say this instead of quoting it ("an email address").
+  valuePhrase?: string
   sensitive?: boolean
   key?: string
   click?: NPoint
   targetRect?: NRect
   labelRect?: NRect
   redactRects: NRect[]
+  // Personal details on screen at that moment (auto-blur), 0..1 of the page.
+  piiRects?: NRect[]
   elementKey?: string
   url: string
   // Which page (document) the event happened on, so its screenshot can be checked.

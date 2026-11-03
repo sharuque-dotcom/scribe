@@ -66,10 +66,12 @@ export function describeEvent(e: CapturedEvent): string {
           ? `Enter your password${label ? ` in the ${q(label)} field` : ''}`
           : `Enter the required value${where.replace(' into', ' in')}`
       }
+      if (e.valuePhrase) return `Type ${e.valuePhrase}${where}`
       const value = cleanLabel(e.value)
       return value ? `Type ${q(value)}${where}` : `Clear the ${q(label || 'text')} ${fieldNoun(e.target)}`
     }
     case 'select': {
+      if (e.valuePhrase) return label ? `Select ${e.valuePhrase} from the ${q(label)} dropdown` : `Select ${e.valuePhrase}`
       const value = cleanLabel(e.value)
       return label ? `Select ${q(value)} from the ${q(label)} dropdown` : `Select ${q(value)}`
     }

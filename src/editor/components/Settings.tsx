@@ -5,6 +5,8 @@ import { LicenseSection } from './License'
 import { Modal } from '../ui'
 import { HIGHLIGHT_PRESETS } from '../../shared/render'
 import { loadHighlight, saveHighlight } from '../../shared/prefs'
+import { loadAutoBlurSaved, saveAutoBlur } from '../../shared/autoblur'
+import { PII_LABEL, type AutoBlurSettings } from '../../shared/pii'
 import { usePlan } from '../usePlan'
 import { FEATURES } from '../../shared/plans'
 import { openCheckout } from '../upgrade'
@@ -16,6 +18,7 @@ export function SettingsDialog({ onClose }: { onClose: (saved?: AiSettings) => v
       <div className="space-y-4 text-sm">
         <LicenseSection />
         <HighlightSection />
+        <AutoBlurSection />
         {AI_ENABLED && (
           <>
             <h3 className="border-t border-line pt-4 font-semibold">AI writing (optional)</h3>
@@ -117,6 +120,75 @@ function HighlightSection() {
         <p className="mt-2 text-xs text-muted">
           Saved. <button className="font-medium text-accent hover:underline" onClick={() => location.reload()}>Reload</button> to see it on every screenshot.
         </p>
+      )}
+    </div>
+  )
+}
+
+// Auto-blur: which personal details to blur while capturing, plus your own words.
+function AutoBlurSection() {
+  const { can } = usePlan()
+  const [s, setS] = useState<AutoBlurSettings | null>(null)
+  const [words, setWords] = useState('')
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) return
+    void loadAutoBlurSaved().then((v) => {
+      setS(v)
+      setWords(v.custom.join('\n'))
+    })
+  }, [])
+  if (!s) return null
+  const save = (next: AutoBlurSettings) => {
+    setS(next)
+    void saveAutoBlur(next)
+  }
+  const kinds = Object.keys(s.kinds) as (keyof AutoBlurSettings['kinds'])[]
+  const pro = can('autoBlurWords')
+  return (
+    <div className="border-t border-line pt-4">
+      <label className="flex items-center justify-between gap-3">
+        <span>
+          <span className="block font-semibold">Auto-blur personal details</span>
+          <span className="block text-xs text-muted">While capturing, these are blurred on screenshots and video and left out of step text. You can remove any blur in the editor.</span>
+        </span>
+        <input type="checkbox" className="accent-indigo-600" checked={s.on} onChange={(e) => save({ ...s, on: e.target.checked })} aria-label="Auto-blur personal details" />
+      </label>
+      {s.on && (
+        <div className="mt-3 space-y-3">
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {kinds.map((k) => (
+              <label key={k} className="flex items-center gap-2">
+                <input type="checkbox" className="accent-indigo-600" checked={s.kinds[k]} onChange={(e) => save({ ...s, kinds: { ...s.kinds, [k]: e.target.checked } })} />
+                {PII_LABEL[k]}
+              </label>
+            ))}
+          </div>
+          <label className="block">
+            <span className="mb-1 flex items-center gap-2 font-medium">
+              {PII_LABEL.custom}
+              {!pro && <span className="rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800">Pro</span>}
+            </span>
+            <textarea
+              className="input h-20 font-mono text-xs"
+              placeholder={'One per line, e.g.\nAl Mansoori\n/MRN-\\d{6}/'}
+              value={words}
+              disabled={!pro}
+              onChange={(e) => setWords(e.target.value)}
+              onBlur={() => save({ ...s, custom: words.split('\n').map((w) => w.trim()).filter(Boolean) })}
+              aria-label="Your own words and patterns"
+            />
+            <span className="mt-1 block text-xs text-muted">
+              {pro ? 'Words match in any case. Put a pattern between slashes, like /MRN-\\d{6}/ for medical record numbers.' : (
+                <>
+                  Blur names, record numbers or anything specific to your work.{' '}
+                  <button className="font-medium text-accent hover:underline" onClick={openCheckout}>
+                    Upgrade to Pro
+                  </button>
+                </>
+              )}
+            </span>
+          </label>
+        </div>
       )}
     </div>
   )
