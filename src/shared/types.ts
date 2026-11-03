@@ -151,6 +151,8 @@ export interface GuideVideo {
   // The recording already shows the real mouse pointer (anything recorded
   // through Chrome's share dialog). Unset counts as true.
   cursorInVideo?: boolean
+  // Why the video ended before the capture did (e.g. "Stop sharing" was pressed).
+  endReason?: string
   duration: number
   w: number
   h: number
@@ -221,14 +223,26 @@ export interface RecorderState {
   rec?: VideoRecording
   guideId?: string
   count: number
+  // Shown in the panel, e.g. why the video stopped early.
+  notice?: string
+}
+
+// A recording the side panel started from Chrome's share dialog.
+export interface PanelVideo {
+  id: string
+  startedAt: number
+  w: number
+  h: number
+  source: RecordSource
 }
 
 // Bookkeeping for a video being recorded right now.
 export interface VideoRecording {
   id: string
   source: RecordSource
-  // The recorder tab (recordings made through Chrome's share dialog).
-  recorderTabId?: number
+  // Recorded in the side panel through Chrome's share dialog (a tab, a window or
+  // the screen). Otherwise the offscreen document records the current tab.
+  inPanel?: boolean
   startedAt: number
   // Total time spent paused, so step times line up with the video.
   pausedMs: number

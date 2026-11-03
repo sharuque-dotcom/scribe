@@ -125,6 +125,11 @@ To let the user record a window or their entire screen instead of a single tab. 
 Service workers cannot record video, so the tab recording runs in an offscreen document while the user captures.
 ```
 
+`sidePanel`
+```
+StepCrumb's controls open in Chrome's side panel when the user clicks the toolbar icon: choose what to make, start, pause and finish, and see a live preview of what is being recorded. The panel stays open beside the page so a recording isn't interrupted when the user switches tabs.
+```
+
 `alarms`
 ```
 To re-check the user's Pro license key once a day, so a cancelled subscription returns to the free plan.

@@ -1,6 +1,7 @@
-// Offscreen document: records the captured tab.
+// Offscreen document: records the captured tab, and puts a side-panel
+// recording back together if the panel closed before it finished.
 // Service workers can't use MediaRecorder, so the background asks this page to.
-import { pauseRecording, startRecording, stopRecording } from './recorder-core'
+import { pauseRecording, recoverRecording, startRecording, stopRecording } from './recorder-core'
 
 chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
   if (msg?.target !== 'offscreen') return
@@ -17,7 +18,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
         } as MediaTrackConstraints)
       : msg.type === 'rec-stop'
         ? stopRecording(msg.videoId ?? null, msg.redact ?? [])
-        : null
+        : msg.type === 'rec-recover'
+          ? recoverRecording(msg.videoId, msg.redact ?? [])
+          : null
   if (!run) return
   run.then(reply, (err) => reply({ error: String(err?.message ?? err) }))
   return true

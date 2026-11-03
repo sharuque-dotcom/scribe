@@ -3,7 +3,7 @@
 import type { Guide, StoredImage, StoredVideo } from './types'
 
 const DB_NAME = 'scribe'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -17,6 +17,7 @@ function openDb(): Promise<IDBDatabase> {
         if (!db.objectStoreNames.contains('images')) db.createObjectStore('images', { keyPath: 'id' })
         if (!db.objectStoreNames.contains('videos')) db.createObjectStore('videos', { keyPath: 'id' })
         if (!db.objectStoreNames.contains('voice')) db.createObjectStore('voice', { keyPath: 'key' })
+        if (!db.objectStoreNames.contains('chunks')) db.createObjectStore('chunks', { keyPath: 'id' })
       }
       req.onsuccess = () => {
         const db = req.result
@@ -36,7 +37,7 @@ function openDb(): Promise<IDBDatabase> {
   return dbPromise
 }
 
-type StoreName = 'guides' | 'images' | 'videos' | 'voice'
+type StoreName = 'guides' | 'images' | 'videos' | 'voice' | 'chunks'
 
 function run<T>(store: StoreName, mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return openDb().then(
@@ -76,6 +77,20 @@ export const deleteImage = (id: string) => run('images', 'readwrite', (s) => s.d
 export const getVideo = (id: string) => run<StoredVideo | undefined>('videos', 'readonly', (s) => s.get(id))
 export const putVideo = (v: StoredVideo) => run('videos', 'readwrite', (s) => s.put(v))
 export const deleteVideo = (id: string) => run('videos', 'readwrite', (s) => s.delete(id))
+
+// Pieces of a recording in progress, saved as they arrive, so the video can
+// still be put together if the page recording it closes before it finishes.
+interface Chunk {
+  id: string
+  blob: Blob
+}
+const chunkRange = (videoId: string) => IDBKeyRange.bound(`${videoId}:`, `${videoId}:\uffff`)
+export const putChunk = (videoId: string, i: number, blob: Blob) => run('chunks', 'readwrite', (s) => s.put({ id: `${videoId}:${String(i).padStart(7, '0')}`, blob }))
+export async function getChunks(videoId: string): Promise<Blob[]> {
+  const all = await run<Chunk[]>('chunks', 'readonly', (s) => s.getAll(chunkRange(videoId)))
+  return all.map((c) => c.blob)
+}
+export const deleteChunks = (videoId: string) => run('chunks', 'readwrite', (s) => s.delete(chunkRange(videoId)))
 
 // Generated voice clips, keyed by voice + text, so each sentence is only made once.
 export interface VoiceClip {

@@ -8,7 +8,6 @@ const common = { bundle: true, minify: true, target: 'chrome110', logLevel: 'inf
 await build({ ...common, entryPoints: ['src/extension/background.ts'], outfile: 'dist/background.js', format: 'esm' })
 await build({ ...common, entryPoints: ['src/extension/content.ts'], outfile: 'dist/content.js', format: 'iife' })
 await build({ ...common, entryPoints: ['src/extension/offscreen.ts'], outfile: 'dist/offscreen.js', format: 'iife' })
-await build({ ...common, entryPoints: ['src/extension/recorder.ts'], outfile: 'dist/recorder.js', format: 'iife' })
 // The free voice runs on ONNX Runtime in WebAssembly. Its files ship inside the
 // extension, because extensions may not load code from the internet.
 mkdirSync('dist/ort', { recursive: true })

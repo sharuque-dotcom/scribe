@@ -2,7 +2,7 @@
 // window/screen recorder (the recorder tab): MediaRecorder to WebM, then
 // the file is indexed and saved to IndexedDB.
 import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Output, WebMOutputFormat } from 'mediabunny'
-import { putVideo } from '../shared/db'
+import { deleteChunks, getChunks, putChunk, putVideo } from '../shared/db'
 import { pixelateRects } from '../shared/redact'
 import type { NRect, RedactSample } from '../shared/types'
 import { redactAt } from '../shared/video/compose'
@@ -11,15 +11,30 @@ let recorder: MediaRecorder | null = null
 let stream: MediaStream | null = null
 let chunks: Blob[] = []
 let mime = 'video/webm'
+// Resolves once the recorder has stopped, however it stopped.
+let stopped: Promise<unknown> = Promise.resolve()
+let writes: Promise<unknown> = Promise.resolve()
 
-export async function startRecording(video: MediaTrackConstraints | MediaStream, onEnded?: () => void) {
+// `persistAs`: also save each piece to IndexedDB as it arrives, so the video
+// can be recovered (recoverRecording) if this page closes mid-recording.
+export async function startRecording(video: MediaTrackConstraints | MediaStream, onEnded?: () => void, persistAs?: string) {
   stream = video instanceof MediaStream ? video : await navigator.mediaDevices.getUserMedia({ audio: false, video })
   // Fires if the user presses Chrome's "Stop sharing" button.
   stream.getVideoTracks()[0].addEventListener('ended', () => onEnded?.())
   mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm'
   chunks = []
+  writes = Promise.resolve()
   recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 })
-  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+  recorder.ondataavailable = (e) => {
+    if (!e.data.size) return
+    chunks.push(e.data)
+    if (persistAs) {
+      const i = chunks.length
+      writes = writes.then(() => putChunk(persistAs, i, e.data)).catch(() => {})
+    }
+  }
+  const rec = recorder
+  stopped = new Promise((r) => rec.addEventListener('stop', r, { once: true }))
   const started = new Promise<number>((r) => (recorder!.onstart = () => r(Date.now())))
   recorder.start(1000)
   const startedAt = await started
@@ -43,15 +58,18 @@ function secretsAt(t: number, samples: RedactSample[]): NRect[] {
 export async function stopRecording(videoId: string | null, redact: RedactSample[] = []) {
   if (!recorder) return { duration: 0 }
   const rec = recorder
-  const done = new Promise((r) => (rec.onstop = r))
+  // The recorder may already have stopped on its own (the shared window closed).
   if (rec.state !== 'inactive') rec.stop()
-  await done
+  await stopped
   stream?.getTracks().forEach((t) => t.stop())
   const raw = new Blob(chunks, { type: 'video/webm' })
+  const persisted = writes
   recorder = null
   stream = null
   chunks = []
   if (!videoId) return { duration: 0 }
+  // The pieces saved along the way aren't needed once the full file is saved.
+  void persisted.then(() => deleteChunks(videoId)).catch(() => {})
 
   // MediaRecorder files have no index or duration, which makes seeking slow.
   // Copying them into a fresh WebM (no re-encoding) adds both. If secret fields
@@ -64,6 +82,19 @@ export async function stopRecording(videoId: string | null, redact: RedactSample
     return await save(raw, videoId, redact, secret)
   } finally {
     clearInterval(keepAlive)
+  }
+}
+
+// Puts a recording back together from the pieces saved while it was running,
+// when the page that recorded it closed before finishing.
+export async function recoverRecording(videoId: string, redact: RedactSample[] = []) {
+  const parts = await getChunks(videoId)
+  if (!parts.length) return { duration: 0 }
+  mime = 'video/webm'
+  try {
+    return await save(new Blob(parts, { type: 'video/webm' }), videoId, redact, redact.some((s) => s.rects.length > 0))
+  } finally {
+    await deleteChunks(videoId).catch(() => {})
   }
 }
 

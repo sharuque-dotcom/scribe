@@ -17,7 +17,7 @@ It's a Chrome/Edge extension with a built-in editor. Everything is stored in you
 
 Clicking a field and then typing becomes one step, not two. A small bar on the page lets you pause or finish, and it never shows up in the screenshots.
 
-**Video.** Choose *Screenshots + video* or *Video only* in the popup and the click-through is also recorded as video, with no camera and no microphone. The **Video** tab then gives you:
+**Video.** Choose *Screenshots + video* or *Video only* in the side panel and the click-through is also recorded as video, with no camera and no microphone. The **Video** tab then gives you:
 
 - auto-zoom in on each click, panning across a page and zooming back out when the page changes
 - a smooth, larger cursor and a click ripple (tab recordings have no cursor, so it's drawn from the recorded mouse path)
@@ -27,15 +27,22 @@ Clicking a field and then typing becomes one step, not two. A small bar on the p
 - a timeline where you drag, resize, add and delete zooms and trim the start and end
 - export at 1080p/30 fps with captions and voice built in, plus `.srt`/`.vtt` subtitle files. Chrome on Windows and Mac saves MP4 (H.264 + AAC); browsers without an H.264 encoder save WebM.
 
-**Screenshots, video or both.** The popup asks what to make before you start:
+**Screenshots, video or both.** Clicking the StepCrumb icon opens a side panel that stays beside your pages. It asks what to make before you start:
 
 - **Screenshots**: the step-by-step guide.
 - **Screenshots + video**: the guide, plus a video of the same run.
 - **Video only**: a video with auto-zoom and captions. Each click is still recorded as a step (it becomes a caption and a zoom), but no screenshots are taken, and the editor opens on the Video tab.
 
-For video, Chrome's own share dialog then asks what to record: a tab, a window (for example the whole browser, or a desktop app) or the entire screen. It opens from a small StepCrumb window, which minimizes itself once recording starts. Tab recordings get a smooth drawn cursor; window and screen recordings already show the real one. Zooms and click ripples follow your clicks in the browser either way. Closing the StepCrumb window or pressing Chrome's "Stop sharing" also finishes. On a Mac, Chrome needs **Screen Recording** permission (System Settings → Privacy & Security) the first time.
+For video, Chrome's own share dialog then asks what to record: a tab, a window (for example the whole browser, or a desktop app) or the entire screen. The recording runs in the side panel, which shows a live preview of what's being recorded. Keep the panel open while recording:
 
-While recording video there's no control bar on the page (it would end up in the video). Finish from the popup or with `Alt+Shift+R`.
+- Switching tabs or windows doesn't stop it.
+- Pressing Chrome's "Stop sharing" (or closing the shared window) keeps the video so far. With *Screenshots + video*, screenshots carry on and the panel says why the video stopped; with *Video only*, the capture finishes.
+- Closing the panel finishes the capture. Each piece of video is saved as it's recorded, so the video is put back together from those pieces.
+- On a Mac, Chrome needs **Screen Recording** permission (System Settings → Privacy & Security) to record a window or the screen. macOS asks once; until it's allowed the video is blank, and the panel's preview shows a warning with the steps. In Mac full screen, the Window list only shows windows on the current screen.
+
+Recordings made through the share dialog already show the real pointer, so StepCrumb doesn't draw a second one (switch *Smooth cursor* on in the Video tab to add it). The `Alt+Shift+R` shortcut records the current tab directly, without the dialog.
+
+While recording video there's no control bar on the page (it would end up in the video). Finish from the side panel or with `Alt+Shift+R`.
 
 **Edit.** In the editor you can:
 
@@ -65,7 +72,7 @@ While recording video there's no control bar on the page (it would end up in the
 
 All of this is decided in one file, `src/shared/plans.ts`: each Pro feature is listed with its tier, and the code asks `can('exportWord')` and so on. To move a feature between Free and Pro, change its tier there.
 
-**Buying.** Pro is sold through [Polar](https://polar.sh): Lifetime ($49, first 1,000 buyers), Monthly ($8) and Yearly ($69), all on one checkout link. Every purchase includes a license key starting with `STEPCRUMB`. *Upgrade to Pro* buttons (popup, license screen, and wherever a Pro feature is locked) open the checkout in a new tab. *Enter license key* opens the license screen (`editor.html#/license`, also in Settings).
+**Buying.** Pro is sold through [Polar](https://polar.sh): Lifetime ($49, first 1,000 buyers), Monthly ($8) and Yearly ($69), all on one checkout link. Every purchase includes a license key starting with `STEPCRUMB`. *Upgrade to Pro* buttons (side panel, license screen, and wherever a Pro feature is locked) open the checkout in a new tab. *Enter license key* opens the license screen (`editor.html#/license`, also in Settings).
 
 **Checking keys.** On entry, StepCrumb registers the computer with Polar's public license API (`/v1/customer-portal/license-keys/activate`), then confirms the key (`/validate`). It re-checks on browser start and once a day. A cancelled or lapsed subscription (Polar no longer accepts the key) drops back to Free and says so; guides and videos are never touched. Without internet, Pro keeps working for 7 days after the last successful check. The license screen shows the plan, who it's licensed to, and a **Manage subscription** link to the Polar customer portal.
 
@@ -108,8 +115,7 @@ src/
   extension/
     content.ts      watches clicks, typing, dropdowns, Enter and mouse movement on each page; shows the capture bar
     background.ts   takes screenshots, writes steps, starts/stops video, tracks recording state
-    offscreen.ts    records the tab to WebM (service workers can't use MediaRecorder)
-    recorder.ts     recorder tab: shows Chrome's share dialog over your browser and records what was picked
+    offscreen.ts    records the tab to WebM (service workers can't use MediaRecorder); rebuilds a panel recording if the panel closed
     recorder-core.ts  shared MediaRecorder start/pause/stop and saving
   shared/
     describe.ts     turns an interaction into instruction text; detects secret fields; merges click+type
@@ -129,7 +135,8 @@ src/
       voice.ts      free voiceover (Kokoro, runs in a worker; clips cached per sentence)
       export.ts     renders the finished MP4/WebM with mediabunny
   editor/           React editor: library, steps, annotator, preview, SOP, training and video tabs
-  popup/            toolbar popup: start (with or without video), pause, finish, discard, recent guides
+  popup/            side panel: start (with or without video), live preview, pause, finish, discard, recent guides
+    panel-recorder.ts records what was picked in Chrome's share dialog; saves each piece as it goes
 ```
 
 Screenshots use `chrome.tabs.captureVisibleTab`. All positions (highlights, annotations, crop) are stored relative to the image (0–1), so they work at any screen size or zoom level.
@@ -147,11 +154,11 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 `npm run e2e` loads the built extension in Chromium and checks two things:
 
 - **`tests/e2e.mjs`** captures a sign-in plus project-creation flow on a local test site. It checks the step text, merging, password redaction and screenshots, then exercises the annotator, the SOP and training templates, and HTML export.
-- Both browser tests run each flow twice, on the free plan and after activating a key against a fake Polar API (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video. `e2e.mjs` also cancels the subscription (the fake starts refusing the key), re-checks, and confirms the app drops to Free with guides intact; checks the popup's Upgrade and license links; and logs every host the extension contacts to confirm only the license check goes online.
+- Both browser tests run each flow twice, on the free plan and after activating a key against a fake Polar API (`tests/license-helper.mjs`), and check what's locked, the PDF footer, Word export, and 720p vs 1080p video. `e2e.mjs` also cancels the subscription (the fake starts refusing the key), re-checks, and confirms the app drops to Free with guides intact; checks the panel's Upgrade and license links; and logs every host the extension contacts to confirm only the license check goes online.
 - **`tests/e2e-voice-long.mjs`** (`npm run e2e:voice`, downloads the real voice model) records a 19-step guide with typing that ends in Enter at the same instant, a very long typed note and fast clicks at the end, generates the voiceover, deletes two lines' voice, then exports. It checks that export makes the missing lines first and that narration plays at every caption.
 - **`tests/e2e-timing.mjs`** first clicks and types at normal human speed and checks every step shows the page just before its action (no trailing, no repeated images), then types a card number and clicks a button that opens another page at full speed. It checks the screenshots show the right page, the card number is pixelated, and the control bar never appears.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
-- **`tests/e2e-screen.mjs`** starts a recording through Chrome's share dialog, picks the entire screen, and checks that it's detected as a screen recording and that clicks land at the right spot in the video. Add `video` as the last argument to test video-only mode. It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out screen [video]`.
+- **`tests/e2e-screen.mjs`** opens the side panel page, presses Start, lets Chrome's share dialog pick the entire screen (or a tab), and checks the live preview, that switching tabs keeps recording, that it's detected as a screen recording, and that clicks land at the right spot in the video. `stopshare` checks that "Stop sharing" keeps the video and carries on with screenshots; `close` checks that closing the panel still saves the video. Add `video` as the last argument to test video-only mode. (Chromium's test switch can't auto-pick a window here, so Window recording is checked by hand.) It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out [screen|tab|stopshare|close] [video]`.
 - **`tests/e2e-ai.mjs`** (`npm run e2e:ai`, which builds with Claude switched on) runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
 
 ## Claude writing (off in this release)

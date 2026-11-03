@@ -5,13 +5,13 @@
   "version": "1.0.0",
   "description": "Click through any task once. Get a step-by-step guide, SOP, training and a narrated video. Private: all saved on your computer.",
   "action": {
-    "default_popup": "popup.html",
     "default_title": "StepCrumb",
     "default_icon": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" }
   },
+  "side_panel": { "default_path": "popup.html" },
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "background": { "service_worker": "background.js", "type": "module" },
-  "permissions": ["tabs", "storage", "scripting", "unlimitedStorage", "tabCapture", "offscreen", "desktopCapture", "alarms"],
+  "permissions": ["tabs", "storage", "scripting", "unlimitedStorage", "tabCapture", "offscreen", "desktopCapture", "alarms", "sidePanel"],
   "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
   "host_permissions": ["<all_urls>", "https://api.polar.sh/*"],
   "content_scripts": [
