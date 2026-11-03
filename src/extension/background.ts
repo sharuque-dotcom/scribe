@@ -414,7 +414,9 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
   // Nothing to make without the video.
   if (mode === 'video' && !video) return getState()
   if (video) {
-    guide.video = { blobId: video.id, source: video.source, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
+    // Recordings made through Chrome's share dialog (the recorder window)
+    // include the real pointer; direct tab capture doesn't.
+    guide.video = { blobId: video.id, source: video.source, cursorInVideo: video.windowId !== undefined, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
     cursorBuf = []
     redactBuf = []
   }

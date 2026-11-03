@@ -30,3 +30,7 @@ body.popup { width: 340px; background: rgb(var(--surface)); }
   .menu { @apply absolute z-30 mt-1 min-w-[200px] rounded-lg border border-line bg-surface p-1 shadow-soft; }
   .menu-item { @apply flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm hover:bg-raised; }
 }
+
+/* Video preview in full screen: the frame fills the screen, letterboxed. */
+.player-box:fullscreen { display: flex; align-items: center; justify-content: center; border: 0; border-radius: 0; }
+.player-box:fullscreen canvas { width: auto; height: auto; max-width: 100vw; max-height: 100vh; cursor: pointer; }

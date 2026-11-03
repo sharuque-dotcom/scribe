@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Step } from '../types'
-import { autoZooms, buildCaptions, buildHolds, buildTracks, cameraAt, cueAt, planVideo, timeMap, toSrt, toVtt, trackAt, zoomAt, ZOOM_IN_MS } from './timeline'
+import { autoZooms, buildCaptions, buildHolds, buildTracks, cameraAt, cueAt, drawsSmoothCursor, planVideo, timeMap, toSrt, toVtt, trackAt, zoomAt, ZOOM_IN_MS } from './timeline'
 
 const step = (id: string, time: number, over: Partial<Step> = {}): Step => ({
   id,
@@ -146,5 +146,21 @@ describe('steps at the same moment', () => {
       const mid = v.at + 100
       expect((cueAt(mid, plan.cues) as (typeof plan.cues)[number] | null)?.stepId).toBe(v.stepId)
     }
+  })
+})
+
+describe('smooth cursor', () => {
+  const v = (o: Record<string, unknown>) => ({ settings: {}, ...o }) as Parameters<typeof drawsSmoothCursor>[0]
+  it('is off when the recording already shows the pointer (Chrome share dialog, window, screen)', () => {
+    expect(drawsSmoothCursor(v({ source: 'tab', cursorInVideo: true }))).toBe(false)
+    expect(drawsSmoothCursor(v({ source: 'screen' }))).toBe(false)
+    expect(drawsSmoothCursor(v({ source: 'tab' }))).toBe(false)
+  })
+  it('is on for direct tab capture, which has no pointer', () => {
+    expect(drawsSmoothCursor(v({ source: 'tab', cursorInVideo: false }))).toBe(true)
+  })
+  it('follows the switch when the person sets it', () => {
+    expect(drawsSmoothCursor(v({ source: 'screen', settings: { smoothCursor: true } }))).toBe(true)
+    expect(drawsSmoothCursor(v({ source: 'tab', cursorInVideo: false, settings: { smoothCursor: false } }))).toBe(false)
   })
 })

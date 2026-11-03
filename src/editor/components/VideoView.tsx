@@ -6,7 +6,7 @@ import { uid } from '../../shared/types'
 import { captionAlpha, drawFrame, layoutFor, outputSize, redactAt } from '../../shared/video/compose'
 import { exportVideo } from '../../shared/video/export'
 import { FEATURES, FREE_LIMITS, videoLimits } from '../../shared/plans'
-import { cameraAt, cueAt, planVideo, rippleAt, toSrt, toVtt, trackAt } from '../../shared/video/timeline'
+import { cameraAt, cueAt, drawsSmoothCursor, planVideo, recordingHasPointer, rippleAt, toSrt, toVtt, trackAt } from '../../shared/video/timeline'
 import { cachedClips, clipKey, clipMs, generateClips, VOICES, type GenerateProgress } from '../../shared/video/voice'
 import { Icon, type ToastData } from '../ui'
 import { lockedToast, openCheckout } from '../upgrade'
@@ -21,7 +21,6 @@ const BACKGROUNDS: { id: VideoBackground; label: string; css: string }[] = [
   { id: 'gradient', label: 'Gradient', css: 'linear-gradient(135deg,#4f46e5,#7c3aed,#db2777)' },
   { id: 'dark', label: 'Dark', css: '#0f172a' },
   { id: 'light', label: 'Light', css: '#e2e8f0' },
-  { id: 'none', label: 'None', css: 'repeating-conic-gradient(#e5e7eb 0 25%, #fff 0 50%) 0 0/10px 10px' },
 ]
 
 interface Props {
@@ -57,7 +56,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const settings = {
     ...video.settings,
     ...(can('allVoices') ? {} : { voiceName: FREE_LIMITS.voice }),
-    ...(can('allBackgrounds') ? {} : { background: FREE_LIMITS.background }),
+    ...(can('allBackgrounds') || FREE_LIMITS.backgrounds.includes(video.settings.background) ? {} : { background: FREE_LIMITS.background }),
   }
   const steps = guide.steps
   const [url, setUrl] = useState<string>()
@@ -66,6 +65,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const [outT, setOutT] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [gen, setGen] = useState<GenerateProgress | null>(null)
+  const playerBox = useRef<HTMLDivElement>(null)
   // Lines whose voice couldn't be made, and an export waiting for the voice.
   const [voiceIssue, setVoiceIssue] = useState<string | null>(null)
   const [exportAfterVoice, setExportAfterVoice] = useState(false)
@@ -353,8 +353,16 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* Player (stays in view while the settings column scrolls) */}
         <div className="min-w-0 flex-1 self-start lg:sticky lg:top-20">
-          <div className="overflow-hidden rounded-xl border border-line bg-black shadow-soft">
-            <canvas ref={canvas} width={W} height={H} className="block h-auto w-full" aria-label="Video preview" />
+          <div ref={playerBox} className="player-box overflow-hidden rounded-xl border border-line bg-black shadow-soft">
+            <canvas
+              ref={canvas}
+              width={W}
+              height={H}
+              className="block h-auto w-full"
+              aria-label="Video preview"
+              // In full screen there are no controls: click the video to play or pause, Esc to leave.
+              onClick={() => document.fullscreenElement && url && !busy && setPlaying((p) => !p)}
+            />
           </div>
           {url && <video ref={videoEl} src={url} muted playsInline preload="auto" className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0" onLoadedData={() => seek(outT)} />}
 
@@ -378,6 +386,17 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             <span className="w-28 text-right text-xs tabular-nums text-muted">
               {fmt(outT)} / {fmt(plan.map.outDuration)}
             </span>
+            <button
+              className="btn-secondary px-3"
+              onClick={() => void playerBox.current?.requestFullscreen().catch(() => {})}
+              disabled={!url}
+              title="Watch full screen (click the video to play or pause, Esc to leave)"
+              aria-label="Full screen"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
+              </svg>
+            </button>
           </div>
 
           {/* Timeline */}
@@ -530,6 +549,36 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
 
           <section className="card space-y-3 p-4 text-sm">
             <h3 className="font-semibold">Look</h3>
+            <div>
+              <span className="mb-1 block">Frame</span>
+              <div className="grid grid-cols-2 gap-1 rounded-lg bg-raised p-1" role="radiogroup" aria-label="Frame">
+                {(
+                  [
+                    ['framed', 'Framed'],
+                    ['full', 'Full screen'],
+                  ] as const
+                ).map(([k, label]) => {
+                  const on = k === 'full' ? settings.background === 'none' : settings.background !== 'none'
+                  return (
+                    <button
+                      key={k}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => patchSettings({ background: k === 'full' ? 'none' : video.settings.background === 'none' ? FREE_LIMITS.background : video.settings.background })}
+                      className={`rounded-md px-2 py-1.5 text-xs font-medium ${on ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="mt-1 text-xs text-muted">{settings.background === 'none' ? 'The recording fills the whole video, at its own size.' : 'The recording sits on a background, with rounded corners.'}</p>
+            </div>
+            <label className="flex items-center justify-between gap-3">
+              <span>Smooth cursor</span>
+              <input type="checkbox" checked={drawsSmoothCursor(video)} onChange={(e) => patchSettings({ smoothCursor: e.target.checked })} className="accent-indigo-600" aria-label="Smooth cursor" />
+            </label>
+            {recordingHasPointer(video) && drawsSmoothCursor(video) && <p className="-mt-2 text-xs text-amber-700">This recording already shows your mouse pointer, so you’ll see two.</p>}
             <label className="flex items-center justify-between gap-3">
               <span>Captions</span>
               <input type="checkbox" checked={settings.captions} onChange={(e) => patchSettings({ captions: e.target.checked })} className="accent-indigo-600" aria-label="Captions" />
@@ -558,6 +607,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 </button>
               )}
             </div>
+            {settings.background !== 'none' && (
             <div>
               <span className="mb-1 block">Background</span>
               <div className="flex gap-2">
@@ -576,6 +626,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 ))}
               </div>
             </div>
+            )}
           </section>
 
           <section className="card space-y-3 p-4 text-sm">

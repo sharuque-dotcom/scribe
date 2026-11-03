@@ -207,6 +207,22 @@ try {
   await editor.getByText('Pro feature: All video backgrounds.').waitFor()
   check(true, 'free plan: extra backgrounds are locked')
   await editor.locator('canvas[aria-label="Video preview"]').screenshot({ path: join(out, 'v4-free-preview.png') })
+  // Full screen: free, the recording fills the whole frame.
+  await editor.getByRole('radio', { name: 'Full screen' }).click()
+  await pause(600)
+  check((await editor.getByRole('button', { name: 'Background Dark' }).count()) === 0, 'full screen hides the background choices')
+  await editor.locator('canvas[aria-label="Video preview"]').screenshot({ path: join(out, 'v4b-full-screen.png') })
+  await editor.screenshot({ path: join(out, 'v4c-video-controls.png') })
+  await editor.getByRole('radio', { name: 'Framed' }).click()
+  await pause(300)
+  // Watch full screen: the player fills the screen; clicking the video plays/pauses.
+  await editor.getByRole('button', { name: 'Full screen' }).click()
+  await editor.waitForFunction(() => !!document.fullscreenElement, null, { timeout: 5000 })
+  await pause(500)
+  await editor.screenshot({ path: join(out, 'v4d-player-full-screen.png') })
+  check(true, 'the player opens full screen')
+  await editor.evaluate(() => document.exitFullscreen())
+  await pause(300)
 
   const { Input, BufferSource, ALL_FORMATS } = await import('mediabunny')
   async function exportAndRead(label, buttonName) {

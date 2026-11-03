@@ -26,6 +26,8 @@ export const FREE_LIMITS = {
   videoMaxMs: 2 * 60 * 1000,
   voice: 'af_heart',
   background: 'gradient',
+  // Backgrounds the free plan can use ('none' = full screen, no frame).
+  backgrounds: ['gradient', 'none'] as string[],
 } as const
 
 export const PRO_VIDEO_WIDTH = 1920

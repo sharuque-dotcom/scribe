@@ -136,6 +136,8 @@ export interface VideoSettings {
   voiceName: string
   zoomScale: number
   background: VideoBackground
+  // Draw StepCrumb's smooth cursor. Unset: only when the recording has no pointer of its own.
+  smoothCursor?: boolean
 }
 
 export type RecordSource = 'tab' | 'window' | 'screen'
@@ -146,6 +148,9 @@ export interface GuideVideo {
   blobId: string
   // What was recorded. Unset means 'tab'.
   source?: RecordSource
+  // The recording already shows the real mouse pointer (anything recorded
+  // through Chrome's share dialog). Unset counts as true.
+  cursorInVideo?: boolean
   duration: number
   w: number
   h: number

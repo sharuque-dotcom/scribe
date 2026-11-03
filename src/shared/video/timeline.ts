@@ -317,8 +317,18 @@ export interface VideoPlan {
   voice: { stepId: string; at: number }[]
 }
 
+// Whether StepCrumb draws its smooth cursor: by default only when the
+// recording doesn't already show the real pointer (two pointers look broken).
+export function recordingHasPointer(video: { source?: string; cursorInVideo?: boolean }): boolean {
+  if (video.source && video.source !== 'tab') return true
+  return video.cursorInVideo ?? true
+}
+export function drawsSmoothCursor(video: { source?: string; cursorInVideo?: boolean; settings: { smoothCursor?: boolean } }): boolean {
+  return video.settings.smoothCursor ?? !recordingHasPointer(video)
+}
+
 export function planVideo(
-  video: { duration: number; source?: string; cursor: CursorSample[]; zooms?: ZoomSegment[]; trimStart: number; trimEnd?: number; settings: { zoomScale: number } },
+  video: { duration: number; source?: string; cursorInVideo?: boolean; cursor: CursorSample[]; zooms?: ZoomSegment[]; trimStart: number; trimEnd?: number; settings: { zoomScale: number; smoothCursor?: boolean } },
   steps: Step[],
   voiceMs: Record<string, number> = {},
 ): VideoPlan {
@@ -327,8 +337,7 @@ export function planVideo(
   const trimEnd = clamp(video.trimEnd ?? duration, trimStart, duration)
   const zooms = video.zooms ?? autoZooms(steps, duration, video.settings.zoomScale)
   const tracks = buildTracks(video.cursor, steps, duration)
-  // Window/screen recordings already contain the real mouse pointer.
-  if (video.source && video.source !== 'tab') tracks.hasCursor = false
+  if (!drawsSmoothCursor(video)) tracks.hasCursor = false
   const captions = buildCaptions(steps, duration).filter((c) => c.end > trimStart && c.start < trimEnd && c.text)
   const holds = buildHolds(captions, voiceMs, duration)
   const map = timeMap(holds, trimStart, trimEnd)
