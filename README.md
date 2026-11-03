@@ -66,7 +66,7 @@ While recording video there's no control bar on the page (it would end up in the
 | Guides, screenshots, auto-zoom, annotations, SOP/training templates | Unlimited | Unlimited |
 | PDF export | "Made with StepCrumb" footer | No branding |
 | Word / HTML / Markdown export | Locked | ✓ |
-| Video export | 720p, small watermark, up to 2 minutes | 1080p, no watermark, any length |
+| Video export | 720p, small watermark, up to 5 minutes | 1080p, no watermark, any length |
 | Voiceover | 1 voice (Heart) | All 6 voices |
 | Video backgrounds | Gradient | All |
 

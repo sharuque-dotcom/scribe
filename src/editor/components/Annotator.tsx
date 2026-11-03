@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
-import { autoHighlight, COLORS, contrastText, HIGHLIGHT, normRect } from '../../shared/render'
+import { autoHighlight, COLORS, contrastText, highlightColor, highlightFill, normRect } from '../../shared/render'
 import type { Annotation, AnnotationType, NRect, Step, StoredImage } from '../../shared/types'
 import { uid } from '../../shared/types'
 import { Icon } from '../ui'
@@ -360,9 +360,9 @@ export function Annotator({ step, image, autoZoom, initialTool = 'box', onCancel
             </defs>
             {spot && dimOutside(normRect(spot), 'rgba(15,23,42,0.55)')}
             {hl?.kind === 'rect' && (
-              <rect x={P(hl.rect.x)} y={Q(hl.rect.y)} width={P(hl.rect.w)} height={Q(hl.rect.h)} rx={unit * 2} fill="rgba(249,115,22,0.12)" stroke={HIGHLIGHT} strokeWidth={unit * 1.4} pointerEvents="none" />
+              <rect x={P(hl.rect.x)} y={Q(hl.rect.y)} width={P(hl.rect.w)} height={Q(hl.rect.h)} rx={unit * 2} fill={highlightFill(0.12)} stroke={highlightColor()} strokeWidth={unit * 1.4} pointerEvents="none" />
             )}
-            {hl?.kind === 'circle' && <circle cx={P(hl.x)} cy={Q(hl.y)} r={unit * 9} fill="rgba(249,115,22,0.18)" stroke={HIGHLIGHT} strokeWidth={unit * 1.4} pointerEvents="none" />}
+            {hl?.kind === 'circle' && <circle cx={P(hl.x)} cy={Q(hl.y)} r={unit * 9} fill={highlightFill(0.18)} stroke={highlightColor()} strokeWidth={unit * 1.4} pointerEvents="none" />}
             {annotations.map((a) => renderAnn(a, a.id, a.id === selected, a))}
             {draft && draft.type !== 'crop' && renderAnn({ ...draft, color } as Annotation, 'draft', false)}
             {shownCrop && (

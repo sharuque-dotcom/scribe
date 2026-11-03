@@ -12,7 +12,8 @@ const DEFINITIONS = {
   // Video
   video1080: { tier: 'pro' as Tier, label: '1080p video' },
   videoNoWatermark: { tier: 'pro' as Tier, label: 'Video without the StepCrumb mark' },
-  videoAnyLength: { tier: 'pro' as Tier, label: 'Videos longer than 2 minutes' },
+  videoAnyLength: { tier: 'pro' as Tier, label: 'Videos longer than 5 minutes' },
+  customHighlight: { tier: 'pro' as Tier, label: 'Your own highlight colour (e.g. your brand colour)' },
   allVoices: { tier: 'pro' as Tier, label: 'All voices' },
   allBackgrounds: { tier: 'pro' as Tier, label: 'All video backgrounds' },
 } satisfies Record<string, { tier: Tier; label: string }>
@@ -23,7 +24,7 @@ export const FEATURES: Record<Feature, { tier: Tier; label: string }> = DEFINITI
 // What the free plan gets where a Pro feature is missing.
 export const FREE_LIMITS = {
   videoWidth: 1280, // 720p (Pro: 1920, 1080p)
-  videoMaxMs: 2 * 60 * 1000,
+  videoMaxMs: 5 * 60 * 1000,
   voice: 'af_heart',
   background: 'gradient',
   // Backgrounds the free plan can use ('none' = full screen, no frame).

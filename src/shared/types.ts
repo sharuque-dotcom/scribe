@@ -223,8 +223,12 @@ export interface RecorderState {
   rec?: VideoRecording
   guideId?: string
   count: number
-  // Shown in the panel, e.g. why the video stopped early.
+  // Shown in the popup, e.g. why the video stopped early.
   notice?: string
+  // For the timer on the page's control bar.
+  startedAt?: number
+  pausedMs?: number
+  pausedAt?: number
 }
 
 // Bookkeeping for a video being recorded right now.

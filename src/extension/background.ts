@@ -449,6 +449,8 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
     count: 0,
     mode,
     video: !!video,
+    startedAt: Date.now(),
+    pausedMs: 0,
     rec: video ? { id: video.id, source: video.source, viaDialog: video.viaDialog, startedAt: video.startedAt, pausedMs: 0 } : undefined,
   }
   await setState(state)
@@ -531,9 +533,11 @@ async function discard(): Promise<RecorderState> {
 async function togglePause(): Promise<RecorderState> {
   const s = await getState()
   if (!s.recording) return s
-  const next: RecorderState = { ...s, paused: !s.paused }
+  const now = Date.now()
+  const next: RecorderState = s.paused
+    ? { ...s, paused: false, pausedAt: undefined, pausedMs: (s.pausedMs ?? 0) + (s.pausedAt ? now - s.pausedAt : 0) }
+    : { ...s, paused: true, pausedAt: now }
   if (s.rec) {
-    const now = Date.now()
     await chrome.runtime.sendMessage({ target: 'offscreen', type: next.paused ? 'rec-pause' : 'rec-resume' }).catch(() => {})
     next.rec = next.paused
       ? { ...s.rec, pausedAt: now }

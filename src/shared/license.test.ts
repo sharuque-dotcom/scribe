@@ -134,7 +134,7 @@ describe('plans', () => {
     }
   })
   it('sets video limits by plan', () => {
-    expect(videoLimits(false)).toEqual({ width: 1280, maxMs: 120000, watermark: true })
+    expect(videoLimits(false)).toEqual({ width: 1280, maxMs: 300000, watermark: true })
     expect(videoLimits(true)).toEqual({ width: 1920, maxMs: undefined, watermark: false })
   })
 })

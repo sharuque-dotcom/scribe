@@ -5,6 +5,19 @@ import type { Annotation, NRect, Step, StoredImage } from './types'
 
 export const COLORS = ['#f97316', '#ef4444', '#eab308', '#22c55e', '#3b82f6', '#a855f7', '#111827', '#ffffff']
 export const HIGHLIGHT = '#f97316'
+// Colours offered for click highlights on every plan (Pro can pick any colour).
+export const HIGHLIGHT_PRESETS = ['#f97316', '#ef4444', '#eab308', '#22c55e', '#3b82f6', '#a855f7']
+let highlight = HIGHLIGHT
+// The colour of the automatic click highlight, set from Settings.
+export const highlightColor = () => highlight
+export function setHighlightColor(c: string | undefined) {
+  highlight = c && /^#[0-9a-f]{6}$/i.test(c) ? c : HIGHLIGHT
+}
+// The highlight colour, see-through.
+export function highlightFill(alpha: number): string {
+  const n = parseInt(highlight.slice(1), 16)
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`
+}
 
 const imageCache = new Map<string, Promise<HTMLImageElement>>()
 
@@ -102,8 +115,8 @@ export function drawStep(step: Step, img: HTMLImageElement, maxWidth: number, vi
   if (hl?.kind === 'rect') {
     const { x, y, w, h } = hl.rect
     ctx.save()
-    ctx.fillStyle = 'rgba(249,115,22,0.12)'
-    ctx.strokeStyle = HIGHLIGHT
+    ctx.fillStyle = highlightFill(0.12)
+    ctx.strokeStyle = highlight
     ctx.lineWidth = unit * 1.4
     roundRectPath(ctx, X(x), Y(y), X(x + w) - X(x), Y(y + h) - Y(y), unit * 2)
     ctx.fill()
@@ -111,8 +124,8 @@ export function drawStep(step: Step, img: HTMLImageElement, maxWidth: number, vi
     ctx.restore()
   } else if (hl?.kind === 'circle') {
     ctx.save()
-    ctx.strokeStyle = HIGHLIGHT
-    ctx.fillStyle = 'rgba(249,115,22,0.18)'
+    ctx.strokeStyle = highlight
+    ctx.fillStyle = highlightFill(0.18)
     ctx.lineWidth = unit * 1.4
     ctx.beginPath()
     ctx.arc(X(hl.x), Y(hl.y), unit * 9, 0, Math.PI * 2)
@@ -171,7 +184,7 @@ function drawInset(ctx: CanvasRenderingContext2D, step: Step, img: HTMLImageElem
   ctx.fill('evenodd')
   ctx.restore()
   ctx.save()
-  ctx.strokeStyle = HIGHLIGHT
+  ctx.strokeStyle = highlight
   ctx.lineWidth = Math.max(2, tw / 80)
   ctx.strokeRect(x + crop.x * tw, y + crop.y * th, crop.w * tw, crop.h * th)
   ctx.restore()

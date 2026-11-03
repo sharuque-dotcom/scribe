@@ -417,26 +417,100 @@ function createBar() {
   const root = host.attachShadow({ mode: 'closed' })
   root.innerHTML = `
     <style>
-      .bar{display:flex;align-items:center;gap:10px;padding:8px 10px 8px 14px;border-radius:999px;
+      .bar{display:flex;align-items:center;gap:8px;padding:6px 6px 6px 4px;border-radius:999px;
         background:#111827;color:#fff;font:500 13px/1.2 Inter,-apple-system,Segoe UI,Roboto,sans-serif;
-        box-shadow:0 8px 30px rgba(0,0,0,.35)}
-      .dot{width:10px;height:10px;border-radius:50%;background:#ef4444;animation:p 1.4s infinite}
+        box-shadow:0 8px 30px rgba(0,0,0,.35);user-select:none}
+      .grip{cursor:grab;padding:6px 2px 6px 8px;color:#6b7280;font-size:14px;line-height:1;letter-spacing:-1px}
+      .grip:active{cursor:grabbing}
+      .dot{width:10px;height:10px;flex:none;border-radius:50%;background:#ef4444;animation:p 1.4s infinite}
       .paused .dot{background:#f59e0b;animation:none}
       @keyframes p{50%{opacity:.35}}
-      button{all:unset;cursor:pointer;padding:6px 12px;border-radius:999px;background:#374151;color:#fff;font-weight:600}
+      .time{font-variant-numeric:tabular-nums;font-weight:600;min-width:38px}
+      .label{color:#cbd5e1;white-space:nowrap}
+      button{all:unset;cursor:pointer;padding:6px 12px;border-radius:999px;background:#374151;color:#fff;font-weight:600;white-space:nowrap}
       button:hover{background:#4b5563}
+      button:focus-visible{outline:2px solid #a5b4fc;outline-offset:1px}
       .stop{background:#ef4444}.stop:hover{background:#dc2626}
+      .discard{background:transparent;color:#9ca3af;padding:6px 8px}.discard:hover{background:#374151;color:#fff}
+      .discard.sure{background:#7f1d1d;color:#fff}
+      .min{background:transparent;color:#9ca3af;padding:6px 9px}.min:hover{background:#374151;color:#fff}
+      .small .label,.small .pause,.small .discard,.small .stop{display:none}
     </style>
-    <div class="bar" part="bar">
-      <span class="dot"></span><span class="label">Capturing · 0 steps</span>
+    <div class="bar" part="bar" role="toolbar" aria-label="StepCrumb capture">
+      <span class="grip" title="Drag to move" aria-hidden="true">⋮⋮</span>
+      <span class="dot"></span><span class="time">0:00</span><span class="label">0 steps</span>
       <button class="pause" type="button">Pause</button>
+      <button class="discard" type="button" title="Delete this capture">Discard</button>
       <button class="stop" type="button">Finish</button>
+      <button class="min" type="button" title="Make smaller" aria-label="Make smaller">–</button>
     </div>`
   const barEl = root.querySelector('.bar') as HTMLElement
   const label = root.querySelector('.label') as HTMLElement
+  const time = root.querySelector('.time') as HTMLElement
   const pauseBtn = root.querySelector('.pause') as HTMLButtonElement
+  const discardBtn = root.querySelector('.discard') as HTMLButtonElement
+  const minBtn = root.querySelector('.min') as HTMLButtonElement
   root.querySelector('.stop')!.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'stop' }))
   pauseBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'togglePause' }))
+
+  // Discard asks once more on the bar itself (no pop-up over the page).
+  let sureTimer = 0
+  discardBtn.addEventListener('click', () => {
+    if (discardBtn.classList.contains('sure')) {
+      window.clearTimeout(sureTimer)
+      void chrome.runtime.sendMessage({ type: 'discard' })
+      return
+    }
+    discardBtn.classList.add('sure')
+    discardBtn.textContent = 'Delete it?'
+    sureTimer = window.setTimeout(() => {
+      discardBtn.classList.remove('sure')
+      discardBtn.textContent = 'Discard'
+    }, 3500)
+  })
+
+  // Make smaller: just the dot, the time and the button to open it again.
+  minBtn.addEventListener('click', () => {
+    const small = barEl.classList.toggle('small')
+    minBtn.textContent = small ? '+' : '–'
+    minBtn.title = small ? 'Show controls' : 'Make smaller'
+    minBtn.setAttribute('aria-label', minBtn.title)
+  })
+
+  // Drag by the grip; the position is kept for the rest of this page.
+  const grip = root.querySelector('.grip') as HTMLElement
+  grip.addEventListener('pointerdown', (e) => {
+    e.preventDefault()
+    grip.setPointerCapture(e.pointerId)
+    const r = host.getBoundingClientRect()
+    const dx = e.clientX - r.left
+    const dy = e.clientY - r.top
+    const move = (ev: PointerEvent) => {
+      const x = Math.max(4, Math.min(innerWidth - r.width - 4, ev.clientX - dx))
+      const y = Math.max(4, Math.min(innerHeight - r.height - 4, ev.clientY - dy))
+      host.style.left = `${x}px`
+      host.style.top = `${y}px`
+      host.style.right = 'auto'
+      host.style.bottom = 'auto'
+    }
+    const up = () => {
+      grip.removeEventListener('pointermove', move)
+      grip.removeEventListener('pointerup', up)
+    }
+    grip.addEventListener('pointermove', move)
+    grip.addEventListener('pointerup', up)
+  })
+
+  // Time spent capturing, leaving out paused stretches.
+  let clock: RecorderState | null = null
+  const tick = () => {
+    if (!clock?.startedAt) return
+    const now = Date.now()
+    const ms = Math.max(0, now - clock.startedAt - (clock.pausedMs ?? 0) - (clock.pausedAt ? now - clock.pausedAt : 0))
+    const sec = Math.floor(ms / 1000)
+    time.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`
+  }
+  window.setInterval(() => host.isConnected && tick(), 1000)
 
   // The bar shows only when recording without video, no screenshot is being
   // taken, and no recent "hold" is active. A new page waits a moment before
@@ -465,8 +539,10 @@ function createBar() {
       }
       mount()
       barEl.classList.toggle('paused', s.paused)
-      label.textContent = s.paused ? `Paused · ${s.count} steps` : `Capturing · ${s.count} step${s.count === 1 ? '' : 's'}`
+      label.textContent = s.paused ? `Paused · ${s.count} step${s.count === 1 ? '' : 's'}` : `${s.count} step${s.count === 1 ? '' : 's'}`
       pauseBtn.textContent = s.paused ? 'Resume' : 'Pause'
+      clock = s
+      tick()
       refresh()
     },
     // A step is being sent; its screenshot may be taken any moment.

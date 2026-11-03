@@ -148,7 +148,7 @@ export function Compare() {
   )
 }
 
-const FREE = ['Unlimited guides and screenshots', 'Auto-zoom screenshots with highlights', 'SOP and training templates', 'PDF export (with a small StepCrumb footer)', 'Video up to 2 minutes, 720p, watermark', 'Voiceover with 1 voice']
+const FREE = ['Unlimited guides and screenshots', 'Auto-zoom screenshots with highlights', 'SOP and training templates', 'PDF export (with a small StepCrumb footer)', 'Video up to 5 minutes, 720p, watermark', 'Voiceover with 1 voice']
 const PAID = ['Everything in Free, without limits', 'No branding on PDFs', 'Word, HTML and Markdown export', 'Video in 1080p, any length, no watermark', 'All 6 voices and all video backgrounds', 'Use on 2 computers']
 
 function Check({ children }: { children: ReactNode }) {

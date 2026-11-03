@@ -4,6 +4,7 @@ import '../index.css'
 import { Library } from './components/Library'
 import { LicensePage } from './components/License'
 import { Workspace, type Tab } from './components/Workspace'
+import { applyHighlight } from '../shared/prefs'
 
 function useHash() {
   const [hash, setHash] = useState(location.hash)
@@ -26,8 +27,11 @@ function App() {
   return <Library />
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+// Highlights are drawn in the chosen colour, so load it before anything renders.
+void applyHighlight().finally(() =>
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  ),
 )
