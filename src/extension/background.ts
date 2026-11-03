@@ -3,8 +3,9 @@
 import { describeEvent, shouldMerge } from '../shared/describe'
 import { recheckLicense } from '../shared/license'
 import { pixelateRects } from '../shared/redact'
+import { pickedSource } from '../shared/coords'
 import { deleteChunks, deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
-import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, PanelVideo, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
+import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
 
 const IDLE: RecorderState = { recording: false, paused: false, count: 0 }
@@ -17,7 +18,7 @@ async function getState(): Promise<RecorderState> {
 async function setState(s: RecorderState) {
   await chrome.storage.session.set({ recorder: s })
   await chrome.action.setBadgeBackgroundColor({ color: s.paused ? '#f59e0b' : '#ef4444' })
-  await chrome.action.setBadgeText({ text: s.recording ? (s.paused ? 'II' : String(s.count || 'REC')) : '' })
+  await chrome.action.setBadgeText({ text: s.notice ? '!' : s.recording ? (s.paused ? 'II' : String(s.count || 'REC')) : '' })
   const tabs = await chrome.tabs.query({})
   for (const t of tabs) {
     if (t.id !== undefined) chrome.tabs.sendMessage(t.id, { type: 'state', state: s }).catch(() => {})
@@ -252,8 +253,8 @@ async function ensureOffscreen() {
   if (contexts.length) return
   await chrome.offscreen.createDocument({
     url: 'offscreen.html',
-    reasons: [chrome.offscreen.Reason.USER_MEDIA],
-    justification: 'Record the tab while capturing a guide',
+    reasons: [chrome.offscreen.Reason.USER_MEDIA, chrome.offscreen.Reason.DISPLAY_MEDIA],
+    justification: 'Record the tab, window or screen the user picked while capturing a guide',
   })
 }
 
@@ -282,23 +283,42 @@ async function startVideo(tabId: number): Promise<{ id: string; startedAt: numbe
   }
 }
 
-// ---------- window / entire-screen recording ----------
-// Recordings picked in Chrome's share dialog (a tab, a window or the entire
-// screen) run in the side panel, which stays open beside the person's pages.
-// The panel saves each piece as it records, so if it's closed mid-recording
-// the offscreen document can still put the video together.
+// ---------- recording through Chrome's share dialog ----------
+// The offscreen document (a hidden StepCrumb page) asks Chrome's share dialog
+// what to record (a tab, a window or the entire screen) and records it. Nothing
+// visible has to stay open, so the page keeps its full width and nothing of
+// StepCrumb's ends up in the video. Each piece is also saved as it's recorded.
 
-type Started = { id: string; startedAt: number; w: number; h: number; inPanel?: boolean; source: RecordSource }
+type Started = { id: string; startedAt: number; w: number; h: number; viaDialog?: boolean; source: RecordSource }
 
-const toPanel = (msg: object) => chrome.runtime.sendMessage({ target: 'recorder', ...msg })
+// Plain-language reasons for errors Chrome gives when screen capture can't start.
+function captureError(message: string): string {
+  if (/timeout starting video source|could not start video source|NotReadableError/i.test(message)) {
+    return "Chrome couldn't start recording your screen. On a Mac: quit Chrome completely (Cmd+Q) and open it again, and check that Google Chrome is on in System Settings → Privacy & Security → Screen Recording. Or pick a Chrome tab instead."
+  }
+  return `Recording couldn't start: ${message}`
+}
+
+async function startDialogVideo(): Promise<{ video: Started | null; notice?: string }> {
+  const id = uid()
+  try {
+    await ensureOffscreen()
+    const res = await toOffscreen<{ startedAt: number; w: number; h: number; surface?: string; label?: string; cancelled?: boolean }>({ type: 'rec-start-display', videoId: id })
+    if (res?.cancelled) return { video: null }
+    if (res?.error || !res?.startedAt) return { video: null, notice: captureError(res?.error ?? 'unknown error') }
+    return { video: { id, startedAt: res.startedAt, w: res.w, h: res.h, viaDialog: true, source: pickedSource(res.surface, res.label ?? '') } }
+  } catch (err) {
+    return { video: null, notice: captureError(String((err as Error)?.message ?? err)) }
+  }
+}
 
 async function stopVideo(rec: VideoRecording, videoId: string | null, redact: RedactSample[] = []): Promise<number> {
-  if (rec.inPanel) {
+  if (rec.viaDialog) {
     try {
-      const res = (await toPanel({ type: 'rec-stop', videoId, redact })) as { duration?: number } | undefined
+      const res = await toOffscreen<{ duration: number }>({ type: 'rec-stop', videoId, redact })
       if (res?.duration) return res.duration
     } catch {
-      // The panel was closed.
+      // The offscreen document went away; rebuild from the saved pieces below.
     }
     if (!videoId) {
       await deleteChunks(rec.id).catch(() => {})
@@ -362,7 +382,7 @@ async function ensureContentScript(tabId: number) {
   }
 }
 
-async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean; panelVideo?: PanelVideo } = {}): Promise<RecorderState> {
+async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean; source?: 'tab' | 'pick' } = {}): Promise<RecorderState> {
   const mode: CaptureMode = opts.mode ?? (opts.video ? 'both' : 'screenshots')
   const current = await getState()
   if (current.recording) return current
@@ -384,9 +404,18 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
   const web = tab?.id !== undefined && !!tab.url && /^https?:/.test(tab.url)
   const wantVideo = mode !== 'screenshots'
   let video: Started | null = null
-  // The side panel already started recording what they picked in Chrome's dialog.
-  if (wantVideo && opts.panelVideo) {
-    video = { ...opts.panelVideo, inPanel: true }
+  // 'pick' (the default): Chrome's share dialog asks what to record.
+  // 'tab': record the current tab directly (the keyboard shortcut).
+  if (wantVideo && (opts.source ?? 'pick') === 'pick') {
+    const res = await startDialogVideo()
+    // Cancelled, or Chrome couldn't start capturing: nothing is recorded.
+    if (!res.video) {
+      await setState({ ...IDLE, notice: res.notice })
+      // The popup has usually closed by now; the badge says there's a message.
+      if (res.notice) await chrome.action.setBadgeText({ text: '!' }).catch(() => {})
+      return getState()
+    }
+    video = res.video
   } else if (wantVideo && web) {
     const v = await startVideo(tab.id!)
     video = v && { ...v, source: 'tab' }
@@ -396,7 +425,7 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
   if (video) {
     // Recordings made through Chrome's share dialog (the recorder tab)
     // include the real pointer; direct tab capture doesn't.
-    guide.video = { blobId: video.id, source: video.source, cursorInVideo: !!video.inPanel, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
+    guide.video = { blobId: video.id, source: video.source, cursorInVideo: !!video.viaDialog, duration: 0, w: video.w, h: video.h, cursor: [], redact: [], trimStart: 0, settings: { ...DEFAULT_VIDEO_SETTINGS } }
     cursorBuf = []
     redactBuf = []
   }
@@ -408,7 +437,7 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
     count: 0,
     mode,
     video: !!video,
-    rec: video ? { id: video.id, source: video.source, inPanel: video.inPanel, startedAt: video.startedAt, pausedMs: 0 } : undefined,
+    rec: video ? { id: video.id, source: video.source, viaDialog: video.viaDialog, startedAt: video.startedAt, pausedMs: 0 } : undefined,
   }
   await setState(state)
 
@@ -493,7 +522,7 @@ async function togglePause(): Promise<RecorderState> {
   const next: RecorderState = { ...s, paused: !s.paused }
   if (s.rec) {
     const now = Date.now()
-    await chrome.runtime.sendMessage({ target: s.rec.inPanel ? 'recorder' : 'offscreen', type: next.paused ? 'rec-pause' : 'rec-resume' }).catch(() => {})
+    await chrome.runtime.sendMessage({ target: 'offscreen', type: next.paused ? 'rec-pause' : 'rec-resume' }).catch(() => {})
     next.rec = next.paused
       ? { ...s.rec, pausedAt: now }
       : { ...s.rec, pausedAt: undefined, pausedMs: s.rec.pausedMs + (s.rec.pausedAt ? now - s.rec.pausedAt : 0) }
@@ -512,7 +541,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'getState':
         return getState()
       case 'start':
-        return start(msg.title, { mode: msg.mode as CaptureMode | undefined, video: !!msg.video, panelVideo: msg.panelVideo as PanelVideo | undefined })
+        return start(msg.title, { mode: msg.mode as CaptureMode | undefined, video: !!msg.video, source: msg.source as 'tab' | 'pick' | undefined })
+      case 'video-blank':
+        return videoNotice("The recording looks blank. On a Mac: open System Settings → Privacy & Security → Screen Recording, turn on Google Chrome, then quit Chrome (Cmd+Q) and reopen it. Or pick a Chrome tab instead.")
       case 'video-ended':
         return videoEnded(String(msg.reason ?? 'The recording ended.'))
       case 'desktop-ping':
@@ -554,7 +585,8 @@ chrome.commands.onCommand.addListener(async (command) => {
   if (s.recording) await stop()
   else {
     const { recordMode } = await chrome.storage.local.get('recordMode')
-    await start(undefined, { mode: (recordMode as CaptureMode) ?? 'both' })
+    // The shortcut records the current tab directly (no share dialog).
+    await start(undefined, { mode: (recordMode as CaptureMode) ?? 'both', source: 'tab' })
   }
 })
 
@@ -565,9 +597,6 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   const tab = await chrome.tabs.get(tabId)
   if (tab.url && /^https?:/.test(tab.url)) await ensureContentScript(tabId)
 })
-
-// The toolbar icon opens StepCrumb's side panel.
-void chrome.sidePanel?.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
 
 chrome.runtime.onInstalled.addListener(() => {
   void setState(IDLE)
@@ -589,26 +618,22 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === LICENSE_ALARM) void recheckLicense()
 })
 
-// The side panel keeps a connection open. If it closes while it's recording,
-// finish the capture; the video is put back together from the saved pieces.
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name !== 'panel') return
-  port.onDisconnect.addListener(async () => {
-    const s = await getState()
-    if (!s.recording || !s.rec?.inPanel) return
-    // Another panel (another window) may be the one recording.
-    const alive = (await toPanel({ type: 'rec-alive' }).catch(() => null)) as { alive?: boolean } | null
-    if (!alive?.alive) await stop(true)
-  })
-})
+// A message for the popup about the video being recorded now.
+async function videoNotice(notice: string): Promise<RecorderState> {
+  const s = await getState()
+  if (!s.recording) return s
+  await setState({ ...s, notice })
+  await chrome.action.setBadgeText({ text: '!' }).catch(() => {})
+  return getState()
+}
 
 // The video stopped before the capture did: Chrome's "Stop sharing" was pressed,
 // the shared window closed, or the capture failed. Keep the video so far. Video
-// only: finish. Otherwise screenshots carry on, and the panel says why.
+// only: finish. Otherwise screenshots carry on, and the popup says why.
 async function videoEnded(reason: string): Promise<RecorderState> {
   await queue
   const state = await getState()
-  if (!state.recording || !state.rec?.inPanel || !state.guideId) return state
+  if (!state.recording || !state.rec?.viaDialog || !state.guideId) return state
   if (state.mode === 'video') return stop(true, reason)
   await flushTracks(true)
   const saved = await getGuide(state.guideId)

@@ -1,5 +1,5 @@
-// Recording through the side panel (Chrome share dialog: tab, window or screen). Needs a display (run under xvfb-run):
-//   npm run build && CHROMIUM_PATH=/path/to/chrome xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs [outDir] [screen|window|tab|stopshare|close] [video]
+// Recording through Chrome's share dialog (tab, window or screen). Needs a display (run under xvfb-run):
+//   npm run build && CHROMIUM_PATH=/path/to/chrome xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs [outDir] [screen|window|tab|stopshare] [video]
 // Records the test site with the chosen source, then checks the video size and
 // that each click's position in the video matches where the pointer really was.
 import { chromium } from 'playwright-core'
@@ -11,8 +11,7 @@ import { join, resolve } from 'node:path'
 const root = resolve(import.meta.dirname, '..')
 const out = resolve(process.argv[2] ?? join(root, 'tests/output'))
 // stopshare: "Stop sharing" mid-way keeps the video and carries on with screenshots.
-// close: closing the panel mid-way still saves the video.
-const variant = ['stopshare', 'close'].includes(process.argv[3]) ? process.argv[3] : null
+const variant = process.argv[3] === 'stopshare' ? 'stopshare' : null
 const source = variant ? 'screen' : ['window', 'tab'].includes(process.argv[3]) ? process.argv[3] : 'screen'
 // 'video' = video only (no screenshots); otherwise screenshots + video.
 const mode = process.argv[4] === 'video' ? 'video' : 'both'
@@ -75,37 +74,16 @@ try {
   await page.addInitScript(() => addEventListener('pointermove', (e) => (window.__move = [e.clientX, e.clientY]), true))
   await page.goto('http://localhost:4175/login.html')
   await page.bringToFront()
-  // Open StepCrumb's panel page (in a real browser it's the side panel; here a
-  // small window beside the page) and press Start, as a person would.
-  await sw.evaluate((m) => chrome.storage.local.set({ recordMode: m }), mode)
-  const panelPromise = ctx.waitForEvent('page')
-  await sw.evaluate(() => chrome.windows.create({ url: chrome.runtime.getURL('popup.html'), type: 'popup', left: 1330, top: 40, width: 260, height: 900 }))
-  const panel = await panelPromise
-  await panel.waitForSelector('text=Start recording')
-  await panel.getByRole('button', { name: /Start recording/ }).click()
-  let st = null
-  for (let i = 0; i < 40 && !st?.recording; i++) {
-    await pause(500)
-    st = await sw.evaluate(() => globalThis.scribe.getState())
-  }
-  check(st && st.recording && st.rec?.inPanel && st.rec?.source === source, `the panel started a "${source}" recording through Chrome's share dialog (${mode})`)
-  await panel.waitForSelector('video[aria-label^="Live preview"]', { timeout: 5000 })
-  const previewOk = await panel.evaluate(async () => {
-    const v = document.querySelector('video[aria-label^="Live preview"]')
-    for (let i = 0; i < 20 && !v.videoWidth; i++) await new Promise((r) => setTimeout(r, 200))
-    const c = document.createElement('canvas')
-    c.width = 48
-    c.height = 27
-    const x = c.getContext('2d')
-    x.drawImage(v, 0, 0, 48, 27)
-    const d = x.getImageData(0, 0, 48, 27).data
-    let s = 0, q = 0
-    for (let j = 0; j < d.length; j += 4) { const l = (d[j] + d[j + 1] + d[j + 2]) / 3; s += l; q += l * l }
-    const n = d.length / 4
-    return Math.sqrt(q / n - (s / n) ** 2) > 4
+  // Press Start as the popup does; Chrome's share dialog (answered by the test
+  // switch) opens from StepCrumb's hidden recording page.
+  let st = await Promise.race([sw.evaluate((m) => globalThis.scribe.start('Screen test', { mode: m, source: 'pick' }), mode), pause(30000).then(() => null)])
+  check(st && st.recording && st.rec?.viaDialog && st.rec?.source === source, `Chrome's share dialog started a "${source}" recording (${mode})`)
+  const shape = await sw.evaluate(async () => {
+    const wins = await chrome.windows.getAll({ populate: true })
+    return { windows: wins.length, tabs: wins.flatMap((w) => w.tabs).map((t) => t.url) }
   })
-  check(previewOk, 'the panel shows a live, non-blank preview of what is recorded')
-  check((await panel.locator('text=looks blank').count()) === 0, 'no blank-recording warning for a real capture')
+  check(shape.windows === 1 && shape.tabs.length === 1 && shape.tabs[0].includes('login.html'), 'no StepCrumb window, tab or panel is open while recording')
+  check(!st.notice, 'no blank-recording warning for a real capture')
 
   // Switching tabs mid-recording doesn't stop it.
   const other = await ctx.newPage()
@@ -115,36 +93,19 @@ try {
   await other.close()
   await pause(600)
   st = await sw.evaluate(() => globalThis.scribe.getState())
-  check(st.recording && st.rec?.inPanel, 'switching tabs keeps the recording going')
+  check(st.recording && st.rec?.viaDialog, 'switching tabs keeps the recording going')
 
   if (variant === 'stopshare') {
     await pause(1500)
     // Same as pressing Chrome's "Stop sharing".
-    await panel.evaluate(() => document.querySelector('video[aria-label^="Live preview"]').srcObject.getVideoTracks()[0].dispatchEvent(new Event('ended')))
+    await sw.evaluate(() => chrome.runtime.sendMessage({ target: 'offscreen', type: 'rec-test-end' }))
     await pause(3000)
     st = await sw.evaluate(() => globalThis.scribe.getState())
-    check(st.recording && !st.rec && /stopped/.test(st.notice ?? ''), 'Stop sharing: screenshots carry on and the panel says why')
-    check((await panel.locator('text=video so far is saved').count()) === 1, 'the panel shows the notice')
+    check(st.recording && !st.rec && /stopped/.test(st.notice ?? ''), 'Stop sharing: screenshots carry on and the popup says why')
     const v = await sw.evaluate(async (id) => (await new Promise((r) => { const q = indexedDB.open('scribe'); q.onsuccess = () => r(q.result) }).then((db) => new Promise((r) => { const t = db.transaction('guides').objectStore('guides').get(id); t.onsuccess = () => r(t.result?.video) }))), st.guideId)
     check(v && v.duration > 1000 && v.endReason, `the video so far is kept (${v?.duration}ms)`)
     await sw.evaluate(() => globalThis.scribe.stop(false))
     console.log('\nStop-sharing checks passed.')
-    await ctx.close()
-    server.close()
-    process.exit(0)
-  }
-  if (variant === 'close') {
-    await pause(2500)
-    const guideId = st.guideId
-    await panel.close()
-    for (let i = 0; i < 40 && st.recording; i++) {
-      await pause(500)
-      st = await sw.evaluate(() => globalThis.scribe.getState())
-    }
-    check(!st.recording, 'closing the panel finishes the recording')
-    const v = await sw.evaluate(async (id) => (await new Promise((r) => { const q = indexedDB.open('scribe'); q.onsuccess = () => r(q.result) }).then((db) => new Promise((r) => { const t = db.transaction('guides').objectStore('guides').get(id); t.onsuccess = () => r(t.result?.video) }))), guideId)
-    check(v && v.duration > 1500, `closing the panel still saves the video (${v?.duration}ms)`)
-    console.log('\nPanel-close checks passed.')
     await ctx.close()
     server.close()
     process.exit(0)

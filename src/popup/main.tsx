@@ -6,12 +6,6 @@ import type { CaptureMode, Guide, RecorderState } from '../shared/types'
 import { Icon, timeAgo } from '../editor/ui'
 import { usePlan } from '../editor/usePlan'
 import { activateLicense, LICENSE_CONFIG } from '../shared/license'
-import { cancelPanelRecording, liveStream, looksBlank, onLiveStream, startPanelRecording } from './panel-recorder'
-
-// Tell the background this panel is open, so it can finish a recording if the
-// panel closes mid-way.
-chrome.runtime.connect({ name: 'panel' })
-const isMac = /Mac/i.test(navigator.platform || navigator.userAgent)
 
 const send = <T,>(msg: object) => chrome.runtime.sendMessage(msg) as Promise<T>
 const MODES: { id: CaptureMode; label: string; hint: string }[] = [
@@ -19,52 +13,6 @@ const MODES: { id: CaptureMode; label: string; hint: string }[] = [
   { id: 'both', label: 'Screenshots + video', hint: 'The guide, plus a video of the same run.' },
   { id: 'video', label: 'Video only', hint: 'A video with auto-zoom and captions. No screenshots.' },
 ]
-
-// What's being recorded, live, with a warning if a window or screen comes out blank.
-function LivePreview() {
-  const [stream, setStream] = useState<MediaStream | null>(liveStream())
-  const [blank, setBlank] = useState(false)
-  useEffect(() => onLiveStream(setStream), [])
-  useEffect(() => {
-    setBlank(false)
-    if (!stream) return
-    let gone = false
-    void looksBlank(stream).then((b) => !gone && setBlank(b))
-    return () => {
-      gone = true
-    }
-  }, [stream])
-  if (!stream) return null
-  return (
-    <div>
-      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Recording now</p>
-      <video
-        className="w-full rounded-lg border border-line bg-black"
-        muted
-        autoPlay
-        playsInline
-        aria-label="Live preview of what's being recorded"
-        ref={(el) => {
-          if (el && el.srcObject !== stream) el.srcObject = stream
-        }}
-      />
-      {blank && (
-        <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="alert">
-          <p className="font-semibold">The recording looks blank.</p>
-          {isMac ? (
-            <ol className="mt-1 list-decimal space-y-0.5 pl-4">
-              <li>Open System Settings → Privacy &amp; Security → Screen Recording.</li>
-              <li>Turn on Google Chrome.</li>
-              <li>Quit Chrome completely and open it again, then record again.</li>
-            </ol>
-          ) : (
-            <p className="mt-1">Check that the window you picked is open and not minimised, or pick Entire screen.</p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
 
 const openEditor = (hash = '') => chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html${hash}`) })
 
@@ -143,33 +91,17 @@ function Popup() {
   const [mode, setMode] = useState<CaptureMode>('screenshots')
   const { plan, pro, ready, lapsed } = usePlan()
   const [justActivated, setJustActivated] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    listGuides().then((g) => setRecent(g.slice(0, 4)))
-  }, [state?.recording])
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
+    listGuides().then((g) => setRecent(g.slice(0, 4)))
     chrome.storage.local.get('recordMode').then(({ recordMode }) => {
       if (recordMode === 'screenshots' || recordMode === 'both' || recordMode === 'video') setMode(recordMode)
     })
-    // The panel stays open while they move between tabs, so keep this current.
-    const checkTab = () => chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => setCanCapture(!!t?.url && /^https?:/.test(t.url)))
-    void checkTab()
-    const onTab = () => void checkTab()
-    chrome.tabs.onActivated.addListener(onTab)
-    chrome.tabs.onUpdated.addListener(onTab)
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => setCanCapture(!!t?.url && /^https?:/.test(t.url)))
     const on = (msg: { type?: string; state?: RecorderState }) => msg?.type === 'state' && msg.state && setState(msg.state)
     chrome.runtime.onMessage.addListener(on)
-    // The state also changes from the shortcut and the background; refresh it.
-    const poll = setInterval(() => void send<RecorderState>({ type: 'getState' }).then(setState).catch(() => {}), 1500)
-    return () => {
-      chrome.runtime.onMessage.removeListener(on)
-      chrome.tabs.onActivated.removeListener(onTab)
-      chrome.tabs.onUpdated.removeListener(onTab)
-      clearInterval(poll)
-    }
+    return () => chrome.runtime.onMessage.removeListener(on)
   }, [])
 
   if (!state) return <div className="p-5 text-sm text-muted">Loading…</div>
@@ -179,32 +111,14 @@ function Popup() {
   const canStart = canCapture || video
   const startMsg = { type: 'start', title, mode }
 
-  const act = async (msg: object) => {
+  const act = async (msg: object, close = false) => {
     setBusy(true)
     try {
       setState(await send<RecorderState>(msg))
     } finally {
       setBusy(false)
     }
-  }
-
-  // Video: Chrome's share dialog opens over their browser, and the recording runs
-  // here in the panel. Screenshots only: the background captures each click.
-  const begin = async () => {
-    if (!video) return act(startMsg)
-    setBusy(true)
-    setError(null)
-    try {
-      const panelVideo = await startPanelRecording()
-      if (!panelVideo) return
-      const next = await send<RecorderState>({ ...startMsg, panelVideo })
-      if (!next?.recording) await cancelPanelRecording()
-      setState(next)
-    } catch (err) {
-      setError(`Recording couldn't start: ${(err as Error)?.message ?? err}`)
-    } finally {
-      setBusy(false)
-    }
+    if (close) window.close()
   }
 
   return (
@@ -217,6 +131,12 @@ function Popup() {
           <Icon name="list" />
         </button>
       </div>
+
+      {state.notice && (
+        <p className="mb-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="status">
+          {state.notice}
+        </p>
+      )}
 
       {state.recording ? (
         <div className="space-y-3">
@@ -232,17 +152,11 @@ function Popup() {
               </p>
             </div>
           </div>
-          {state.notice && (
-            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="status">
-              {state.notice}
-            </p>
-          )}
-          <LivePreview />
           <div className="flex gap-2">
             <button className="btn-secondary flex-1" disabled={busy} onClick={() => act({ type: 'togglePause' })}>
               {state.paused ? 'Resume' : 'Pause'}
             </button>
-            <button className="btn-danger flex-1" disabled={busy} onClick={() => act({ type: 'stop' })}>
+            <button className="btn-danger flex-1" disabled={busy} onClick={() => act({ type: 'stop' }, true)}>
               Finish
             </button>
           </div>
@@ -256,7 +170,7 @@ function Popup() {
         </div>
       ) : (
         <div className="space-y-3">
-          <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canStart && !busy && void begin()} />
+          <input className="input" placeholder="What are you documenting? (optional)" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && canStart && act(startMsg, true)} />
           <div className="space-y-1.5" role="radiogroup" aria-label="What to make">
             {MODES.map((m) => (
               <button
@@ -277,19 +191,14 @@ function Popup() {
               </button>
             ))}
           </div>
-          <button className="btn-danger w-full py-2.5" disabled={busy || !canStart} onClick={() => void begin()}>
+          <button className="btn-danger w-full py-2.5" disabled={busy || !canStart} onClick={() => act(startMsg, true)}>
             <Icon name="record" /> {video ? 'Start recording' : 'Start capturing'}
           </button>
-          {error && (
-            <p className="text-xs text-rec" role="alert">
-              {error}
-            </p>
-          )}
           <p className="text-xs text-muted">
             {!canStart
               ? 'Open a website (http or https) to capture screenshots. Browser pages like chrome:// can’t be captured.'
               : video
-                ? `Chrome will ask what to share: a tab, a window or your entire screen. Then click through your task, and finish here or press Alt+Shift+R. Keep this panel open while recording.${isMac ? ' In Mac full screen, Window only lists windows on this screen; use Chrome Tab or Entire screen instead.' : ''}`
+                ? 'Chrome will ask what to share: a tab, a window or your entire screen. Then click through your task. Finish from this popup (StepCrumb icon) or press Alt+Shift+R.'
                 : 'Click through your task as usual. Each click becomes a step with a screenshot. Shortcut: Alt+Shift+R.'}
           </p>
         </div>

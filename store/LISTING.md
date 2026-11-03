@@ -115,19 +115,9 @@ To add StepCrumb's step recorder to tabs that were already open before capturing
 To record the current tab as a video when the user chooses "Screenshots + video" or "Video only". Recording only happens after the user starts it and stops when they press Finish.
 ```
 
-`desktopCapture`
-```
-To let the user record a window or their entire screen instead of a single tab. Chrome's own share dialog asks the user what to share every time.
-```
-
 `offscreen`
 ```
-Service workers cannot record video, so the tab recording runs in an offscreen document while the user captures.
-```
-
-`sidePanel`
-```
-StepCrumb's controls open in Chrome's side panel when the user clicks the toolbar icon: choose what to make, start, pause and finish, and see a live preview of what is being recorded. The panel stays open beside the page so a recording isn't interrupted when the user switches tabs.
+Service workers cannot record video, so the recording runs in a hidden offscreen document while the user captures. It also shows Chrome's share dialog so the user can pick a tab, window or screen to record.
 ```
 
 `alarms`

@@ -227,22 +227,13 @@ export interface RecorderState {
   notice?: string
 }
 
-// A recording the side panel started from Chrome's share dialog.
-export interface PanelVideo {
-  id: string
-  startedAt: number
-  w: number
-  h: number
-  source: RecordSource
-}
-
 // Bookkeeping for a video being recorded right now.
 export interface VideoRecording {
   id: string
   source: RecordSource
-  // Recorded in the side panel through Chrome's share dialog (a tab, a window or
-  // the screen). Otherwise the offscreen document records the current tab.
-  inPanel?: boolean
+  // Picked in Chrome's share dialog (a tab, a window or the screen). Otherwise
+  // the current tab was recorded directly. Both record in the offscreen document.
+  viaDialog?: boolean
   startedAt: number
   // Total time spent paused, so step times line up with the video.
   pausedMs: number
