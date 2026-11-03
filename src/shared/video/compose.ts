@@ -146,24 +146,96 @@ export function drawFrame(ctx: Ctx, L: Layout, bg: VideoBackground, frame: Canva
   if (st.watermark) drawWatermark(ctx, L)
 }
 
-function drawWatermark(ctx: Ctx, L: Layout) {
-  const size = Math.round(20 * L.k)
-  const text = 'Made with StepCrumb'
+// The StepCrumb logo (same shapes as the app icon), drawn at (x, y), size px square.
+function drawLogo(ctx: Ctx, x: number, y: number, size: number) {
+  const u = size / 128
   ctx.save()
-  ctx.font = `600 ${size}px Inter, -apple-system, "Segoe UI", Roboto, sans-serif`
-  const padX = size * 0.7
-  const w = ctx.measureText(text).width + padX * 2
-  const h = size * 1.9
-  const m = Math.round(16 * L.k)
-  const x = L.vx + L.vw - w - m
-  const y = L.vy + m
-  ctx.globalAlpha = 0.8
-  ctx.fillStyle = 'rgba(15,23,42,0.75)'
-  roundRect(ctx, x, y, w, h, h / 2)
+  ctx.translate(x, y)
+  ctx.scale(u, u)
+  ctx.fillStyle = '#4f46e5'
+  roundRect(ctx, 0, 0, 128, 128, 28)
   ctx.fill()
   ctx.fillStyle = '#ffffff'
+  roundRect(ctx, 30, 24, 60, 78, 9)
+  ctx.fill()
+  ctx.fillStyle = '#c7d2fe'
+  for (const [ly, lw] of [[40, 38], [54, 30], [68, 34]]) {
+    roundRect(ctx, 41, ly, lw, 6, 3)
+    ctx.fill()
+  }
+  ctx.beginPath()
+  ctx.arc(88, 88, 20, 0, Math.PI * 2)
+  ctx.fillStyle = '#f97316'
+  ctx.fill()
+  ctx.lineWidth = 6
+  ctx.strokeStyle = '#4f46e5'
+  ctx.stroke()
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath()
+  ctx.moveTo(83, 79)
+  ctx.lineTo(97, 87)
+  ctx.lineTo(91, 89)
+  ctx.lineTo(89, 95)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+}
+
+// Free plan: "Made with [logo] StepCrumb · stepcrumb.com" in a white pill. With a
+// background, it sits in the margin under the recording, so it never covers it.
+function drawWatermark(ctx: Ctx, L: Layout) {
+  const size = Math.round(19 * L.k)
+  const font = (weight: number, px: number) => `${weight} ${px}px Inter, -apple-system, "Segoe UI", Roboto, sans-serif`
+  const lead = 'Made with'
+  const name = 'StepCrumb'
+  const site = 'stepcrumb.com'
+  const logo = Math.round(size * 1.35)
+  const gap = size * 0.45
+  const padX = size * 0.75
+  const h = Math.round(size * 2.1)
+  ctx.save()
+  ctx.font = font(500, size)
+  const leadW = ctx.measureText(lead).width
+  ctx.font = font(700, size)
+  const nameW = ctx.measureText(name).width
+  ctx.font = font(500, Math.round(size * 0.85))
+  const siteW = ctx.measureText(site).width
+  const dot = size * 0.9
+  const w = padX + leadW + gap + logo + gap * 0.6 + nameW + dot + siteW + padX
+  const m = Math.round(16 * L.k)
+  const below = L.H - (L.vy + L.vh)
+  const x = L.vx + L.vw - w - (below >= h + m ? 0 : m)
+  const y = below >= h + m ? L.vy + L.vh + Math.round((below - h) / 2) : L.vy + m
+
+  ctx.shadowColor = 'rgba(15,23,42,0.25)'
+  ctx.shadowBlur = 18 * L.k
+  ctx.shadowOffsetY = 4 * L.k
+  ctx.fillStyle = 'rgba(255,255,255,0.96)'
+  roundRect(ctx, x, y, w, h, h / 2)
+  ctx.fill()
+  ctx.shadowColor = 'transparent'
+
+  const mid = y + h / 2 + 1
   ctx.textBaseline = 'middle'
-  ctx.fillText(text, x + padX, y + h / 2 + 1)
+  let cx = x + padX
+  ctx.font = font(500, size)
+  ctx.fillStyle = '#475569'
+  ctx.fillText(lead, cx, mid)
+  cx += leadW + gap
+  drawLogo(ctx, cx, y + (h - logo) / 2, logo)
+  cx += logo + gap * 0.6
+  ctx.font = font(700, size)
+  ctx.fillStyle = '#4f46e5'
+  ctx.fillText(name, cx, mid)
+  cx += nameW
+  ctx.fillStyle = '#cbd5e1'
+  ctx.beginPath()
+  ctx.arc(cx + dot / 2, y + h / 2, size * 0.12, 0, Math.PI * 2)
+  ctx.fill()
+  cx += dot
+  ctx.font = font(500, Math.round(size * 0.85))
+  ctx.fillStyle = '#64748b'
+  ctx.fillText(site, cx, mid)
   ctx.restore()
 }
 

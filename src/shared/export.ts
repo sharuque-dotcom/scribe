@@ -136,18 +136,27 @@ code{background:#f1f5f9;padding:1px 5px;border-radius:4px;font-size:.9em}
 @media print{body{background:#fff}main{padding:0;max-width:none}figure.shot img{box-shadow:none}h2{break-after:avoid}}
 `
 
-export const BRAND_FOOTER = 'Made with StepCrumb · stepcrumb.com'
 
 // Free-plan documents carry a small "Made with StepCrumb" footer, repeated on
 // every printed page.
 const BRAND_CSS = `
-.brand{margin:40px 0 0;padding-top:12px;border-top:1px solid #e2e8f0;color:#64748b;font-size:12px;text-align:center}
-.brand b{color:#4f46e5}
-@media print{@page{margin-bottom:18mm}.brand{position:fixed;bottom:0;left:0;right:0;margin:0;padding:6px 0;background:#fff}}
+.brand{margin:48px 0 0;text-align:center}
+.brand a{display:inline-flex;align-items:center;gap:7px;padding:7px 14px 7px 12px;border:1px solid #e0e7ff;border-radius:999px;background:linear-gradient(90deg,#eef2ff,#fdf2f8);color:#475569;font-size:13px;text-decoration:none;box-shadow:0 1px 2px rgba(15,23,42,.06)}
+.brand a:hover{border-color:#a5b4fc}
+.brand svg{width:18px;height:18px;flex:none}
+.brand b{color:#4f46e5;font-weight:700}
+.brand .site{color:#94a3b8;font-size:12px}
+@media print{@page{margin-bottom:18mm}.brand{position:fixed;bottom:0;left:0;right:0;margin:0;padding:6px 0;background:#fff}.brand a{box-shadow:none}}
 `
 
+// The StepCrumb logo, same shapes as the app icon.
+const LOGO_SVG = '<svg viewBox="0 0 128 128" aria-hidden="true"><rect width="128" height="128" rx="28" fill="#4f46e5"/><rect x="30" y="24" width="60" height="78" rx="9" fill="#fff"/><rect x="41" y="40" width="38" height="6" rx="3" fill="#c7d2fe"/><rect x="41" y="54" width="30" height="6" rx="3" fill="#c7d2fe"/><rect x="41" y="68" width="34" height="6" rx="3" fill="#c7d2fe"/><circle cx="88" cy="88" r="20" fill="#f97316" stroke="#4f46e5" stroke-width="6"/><path d="M83 79l14 8-6 2-2 6z" fill="#fff"/></svg>'
+// Where the footer link goes; ref says the visit came from a shared guide.
+export const BRAND_URL = 'https://www.stepcrumb.com/?ref=made-with'
+const BRAND_HTML = `<footer class="brand"><a href="${BRAND_URL}" target="_blank" rel="noopener">Made with ${LOGO_SVG}<b>StepCrumb</b><span class="site">· stepcrumb.com</span></a></footer>`
+
 export function wrapHtml(title: string, body: string, opts: { branded?: boolean } = {}): string {
-  const footer = opts.branded ? `<footer class="brand">Made with <b>StepCrumb</b> · stepcrumb.com</footer>` : ''
+  const footer = opts.branded ? BRAND_HTML : ''
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(
     title,
   )}</title><style>${DOC_CSS}${opts.branded ? BRAND_CSS : ''}</style></head><body><main>${body}${footer}</main></body></html>`

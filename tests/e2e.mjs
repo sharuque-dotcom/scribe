@@ -197,6 +197,7 @@ try {
   const previewFrame = editor.frameLocator('iframe[title="Guide preview"]')
   await previewFrame.locator('footer.brand').waitFor()
   check((await previewFrame.locator('footer.brand').textContent()).includes('Made with StepCrumb'), 'free plan: guide (and its PDF) carries the StepCrumb footer')
+  check((await previewFrame.locator('footer.brand a').getAttribute('href'))?.startsWith('https://www.stepcrumb.com'), 'the footer links to stepcrumb.com')
   await editor.goto(editor.url().replace('/preview', ''))
   await editor.waitForSelector('textarea[aria-label^="Step"]')
 
