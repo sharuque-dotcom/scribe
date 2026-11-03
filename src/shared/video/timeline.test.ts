@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Step } from '../types'
-import { autoZooms, buildCaptions, buildHolds, buildTracks, cameraAt, planVideo, timeMap, toSrt, toVtt, trackAt, zoomAt, ZOOM_IN_MS } from './timeline'
+import { autoZooms, buildCaptions, buildHolds, buildTracks, cameraAt, cueAt, planVideo, timeMap, toSrt, toVtt, trackAt, zoomAt, ZOOM_IN_MS } from './timeline'
 
 const step = (id: string, time: number, over: Partial<Step> = {}): Step => ({
   id,
@@ -126,5 +126,25 @@ describe('window and screen recordings', () => {
     const cam = cameraAt(2000, p.tracks, p.zooms)
     expect(cam.x).toBeLessThan(0.5)
     expect(p.tracks.hasCursor).toBe(false)
+  })
+})
+
+describe('steps at the same moment', () => {
+  const st = (id: string, time: number, title: string) => ({ id, kind: 'step', title, time, action: 'click', annotations: [], createdAt: 0 }) as unknown as Step
+  const steps = [st('a', 1000, 'Type IL-0400 into the Search field'), st('b', 1000, 'Press Enter'), st('c', 1000, 'Click the link'), st('d', 5000, 'Click Save')]
+  const ms = { a: 2500, b: 800, c: 1200, d: 900 }
+  const plan = planVideo({ duration: 9000, cursor: [], trimStart: 0, settings: { zoomScale: 1.8 } }, steps, ms)
+  it('never lets two narrations overlap', () => {
+    const v = plan.voice
+    for (let i = 1; i < v.length; i++) {
+      const prev = v[i - 1]
+      expect(v[i].at).toBeGreaterThanOrEqual(prev.at + ms[prev.stepId as keyof typeof ms])
+    }
+  })
+  it('shows each caption while its own narration plays', () => {
+    for (const v of plan.voice) {
+      const mid = v.at + 100
+      expect((cueAt(mid, plan.cues) as (typeof plan.cues)[number] | null)?.stepId).toBe(v.stepId)
+    }
   })
 })

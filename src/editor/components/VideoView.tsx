@@ -66,6 +66,10 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const [outT, setOutT] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [gen, setGen] = useState<GenerateProgress | null>(null)
+  // Lines whose voice couldn't be made, and an export waiting for the voice.
+  const [voiceIssue, setVoiceIssue] = useState<string | null>(null)
+  const [exportAfterVoice, setExportAfterVoice] = useState(false)
+  const [askExport, setAskExport] = useState(false)
   const [exporting, setExporting] = useState<number | null>(null)
   const [selZoom, setSelZoom] = useState<string | null>(null)
   const videoEl = useRef<HTMLVideoElement>(null)
@@ -284,20 +288,41 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
     const ctrl = new AbortController()
     abort.current = ctrl
     setGen({ done: 0, total: lines.length, download: null })
+    setVoiceIssue(null)
     try {
-      const made = await generateClips(lines, settings.voiceName, setGen, ctrl.signal)
-      setClips((c) => ({ ...c, ...made }))
+      const res = await generateClips(lines, settings.voiceName, setGen, ctrl.signal)
+      setClips((c) => ({ ...c, ...res.clips }))
+      // Re-read what's saved, so the count of missing lines is always right.
+      setClips(await cachedClips(lines, settings.voiceName))
+      if (res.failed.length) {
+        setVoiceIssue(`${res.failed.length} line${res.failed.length === 1 ? '' : 's'} could not get a voice${res.error ? ` (${res.error})` : ''}.`)
+      }
       if (!settings.voice) patchSettings({ voice: true })
     } catch (err) {
-      toast({ text: `Voice failed: ${(err as Error).message}`, tone: 'error' })
+      setVoiceIssue(`Voice failed: ${(err as Error).message}`)
     } finally {
       setGen(null)
       abort.current = null
     }
   }
 
-  const runExport = async () => {
+  // Export makes any missing voice first, then continues once it's ready.
+  useEffect(() => {
+    if (!exportAfterVoice || gen !== null) return
+    setExportAfterVoice(false)
+    if (missingVoice === 0) void runExport(true)
+    else setAskExport(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exportAfterVoice, gen, missingVoice])
+
+  const runExport = async (voiceChecked = false) => {
     if (!recording) return
+    setAskExport(false)
+    if (!voiceChecked && settings.voice && missingVoice > 0) {
+      setExportAfterVoice(true)
+      void generateVoice()
+      return
+    }
     setPlaying(false)
     const ctrl = new AbortController()
     abort.current = ctrl
@@ -450,7 +475,20 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
         <aside className="w-full space-y-4 lg:w-80">
           <section className="card space-y-3 p-4 text-sm">
             <h3 className="font-semibold">Export</h3>
-            <button className="btn-primary w-full" onClick={runExport} disabled={!recording || busy}>
+            {askExport && (
+              <div className="rounded-md bg-amber-50 p-2.5 text-xs text-amber-900" role="alert">
+                <p className="mb-2">{missingVoice} line{missingVoice === 1 ? '' : 's'} still {missingVoice === 1 ? 'has' : 'have'} no voice. Their captions will show without narration.</p>
+                <div className="flex gap-2">
+                  <button className="btn-secondary px-2 py-1 text-xs" onClick={() => void runExport(true)}>
+                    Export anyway
+                  </button>
+                  <button className="px-2 py-1 text-xs text-amber-900 underline" onClick={() => setAskExport(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+            <button className="btn-primary w-full" onClick={() => void runExport()} disabled={!recording || busy}>
               <Icon name="download" /> {exporting !== null ? `Exporting… ${Math.round(exporting * 100)}%` : can('video1080') ? 'Export video' : 'Export video (720p)'}
             </button>
             {exporting !== null && (
@@ -575,6 +613,14 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
               <button className="btn-secondary w-full" onClick={generateVoice} disabled={busy || !lines.length || missingVoice === 0}>
                 <Icon name="sparkle" /> {missingVoice === 0 ? 'Voice is up to date' : missingVoice === lines.length ? 'Generate voiceover' : `Update voice (${missingVoice} line${missingVoice === 1 ? '' : 's'})`}
               </button>
+            )}
+            {voiceIssue && !gen && (
+              <div className="rounded-md bg-amber-50 p-2.5 text-xs text-amber-900" role="alert">
+                <p className="mb-1.5">{voiceIssue}</p>
+                <button className="font-semibold underline" onClick={() => void generateVoice()} disabled={busy}>
+                  Try again
+                </button>
+              </div>
             )}
             <p className="text-xs text-muted">Free voice that runs on this computer. The first time, it downloads about 90 MB. If a line runs long, the video pauses on that frame until it finishes.</p>
           </section>

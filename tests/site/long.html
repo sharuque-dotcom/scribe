@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Appointments · Projectly</title>
+<style>body{font:15px system-ui;margin:0;background:#f8fafc}header{background:#0f172a;color:#fff;padding:14px 24px}main{padding:24px;display:grid;grid-template-columns:420px 1fr;gap:24px}
+label{display:block;font-weight:600;margin:10px 0 6px}input,textarea{width:100%;box-sizing:border-box;padding:9px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}button{padding:9px 10px;border:0;border-radius:8px;background:#2563eb;color:#fff;font-weight:600}</style></head>
+<body><header><strong>Projectly</strong> · Appointments</header>
+<main><div>
+<button id="open">Open search</button>
+<label for="search">Search records</label><input id="search">
+<label for="notes">Notes</label><textarea id="notes" rows="5"></textarea>
+</div><div class="grid">
+<button id="b1">Monday</button><button id="b2">Tuesday</button><button id="b3">Wednesday</button><button id="b4">Thursday</button>
+<button id="b5">Friday</button><button id="b6">Morning</button><button id="b7">Afternoon</button><button id="b8">Evening</button>
+<button id="b9">9:00 AM</button><button id="b10">9:30 AM</button><button id="b11">10:00 AM</button><button id="b12">Book</button>
+<button id="b13">Confirm</button><button id="b14">Close</button>
+</div></main>
+<script>document.getElementById('open').onclick=()=>setTimeout(()=>document.getElementById('search').focus(),50)</script>
+</body></html>

@@ -203,10 +203,16 @@ export interface Caption {
 
 export function buildCaptions(steps: Step[], duration: number): Caption[] {
   const timed = steps.filter(isTimedStep).sort((a, b) => a.time - b.time)
+  // Steps can share a moment (typing that ends with Enter or a click). Give each
+  // its own start, 1ms apart, so its caption shows and its narration gets its
+  // own turn (the freeze before the next step makes room for it).
+  const starts: number[] = []
+  for (const s of timed) starts.push(starts.length ? Math.max(s.time, starts[starts.length - 1] + 1) : s.time)
   return timed.map((s, i) => {
-    const next = timed[i + 1]?.time ?? duration
-    const end = Math.min(next, s.time + CAPTION_MAX_MS, duration)
-    return { stepId: s.id, start: s.time, end: Math.max(end, Math.min(duration, s.time + 400)), text: (s.narration || s.title).trim() }
+    const start = starts[i]
+    const next = starts[i + 1] ?? duration
+    const end = Math.min(next, start + CAPTION_MAX_MS, duration)
+    return { stepId: s.id, start, end: Math.max(end, Math.min(duration, start + 400)), text: (s.narration || s.title).trim() }
   })
 }
 
