@@ -227,8 +227,8 @@ export interface RecorderState {
 export interface VideoRecording {
   id: string
   source: RecordSource
-  // The recorder window (window/screen recordings).
-  windowId?: number
+  // The recorder tab (recordings made through Chrome's share dialog).
+  recorderTabId?: number
   startedAt: number
   // Total time spent paused, so step times line up with the video.
   pausedMs: number

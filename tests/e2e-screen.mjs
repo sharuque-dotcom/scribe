@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
 const out = resolve(process.argv[2] ?? join(root, 'tests/output'))
-const source = ['window', 'tab'].includes(process.argv[3]) ? process.argv[3] : 'screen'
+const source = ['window', 'tab', 'self'].includes(process.argv[3]) ? process.argv[3] : 'screen'
 // 'video' = video only (no screenshots); otherwise screenshots + video.
 const mode = process.argv[4] === 'video' ? 'video' : 'both'
 mkdirSync(out, { recursive: true })
@@ -33,7 +33,7 @@ const server = createServer((req, res) => {
 }).listen(4175)
 
 // The capture picker is answered automatically by Chromium's test switch.
-const pickName = source === 'screen' ? 'Entire screen' : process.env.PICK ?? (source === 'tab' ? 'Sign in · Projectly' : 'Sign in · Projectly - Chromium')
+const pickName = source === 'screen' ? 'Entire screen' : process.env.PICK ?? (source === 'tab' ? 'Sign in' : source === 'self' ? 'Choose what to record' : 'Sign in · Projectly - Chromium')
 const ctx = await chromium.launchPersistentContext('', {
   executablePath: process.env.CHROMIUM_PATH,
   headless: false,
@@ -72,8 +72,34 @@ try {
   await page.addInitScript(() => addEventListener('pointermove', (e) => (window.__move = [e.clientX, e.clientY]), true))
   await page.goto('http://localhost:4175/login.html')
   await page.bringToFront()
+  if (source === 'self') {
+    // Picking the recorder tab itself is caught, and the dialog is shown again.
+    void sw.evaluate(() => globalThis.scribe.start('Self test', { mode: 'video', source: 'pick' }))
+    await pause(4000)
+    const rec = ctx.pages().find((p) => p.url().includes('recorder.html'))
+    const text = await rec.locator('#status').textContent()
+    check(/own tab/.test(text), 'picking the recorder tab itself is refused: ' + text)
+    const st = await sw.evaluate(() => globalThis.scribe.getState())
+    check(!st.recording, 'nothing is recorded meanwhile')
+    console.log('\nSelf-pick check passed.')
+    await ctx.close()
+    server.close()
+    process.exit(0)
+  }
   const st = await Promise.race([sw.evaluate((m) => globalThis.scribe.start('Screen test', { mode: m, source: 'pick' }), mode), pause(30000).then(() => null)])
+  if (!st?.recording) console.log("state", JSON.stringify(st), await ctx.pages().find((p) => p.url().includes("recorder.html"))?.locator("#status").textContent())
   check(st && st.recording && st.rec?.source === source, `Chrome's share dialog started a "${source}" recording (${mode})`)
+  // The share dialog opens from a recorder tab in the same window, and the
+  // working tab is back in front once recording starts.
+  const where = await sw.evaluate(async () => {
+    const wins = await chrome.windows.getAll({ populate: true })
+    const tabs = wins.flatMap((w) => w.tabs)
+    const rec = tabs.find((t) => t.url?.includes('recorder.html'))
+    const work = tabs.find((t) => t.url?.includes('login.html'))
+    return { windows: wins.length, sameWindow: rec?.windowId === work?.windowId, pinned: rec?.pinned, workActive: work?.active }
+  })
+  check(where.windows === 1 && where.sameWindow && where.pinned, 'recorder is a pinned tab in the same window (no new window)')
+  check(where.workActive, 'the working tab is back in front after picking')
   await page.bringToFront()
   await pause(800)
 

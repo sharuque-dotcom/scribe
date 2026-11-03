@@ -109,7 +109,7 @@ src/
     content.ts      watches clicks, typing, dropdowns, Enter and mouse movement on each page; shows the capture bar
     background.ts   takes screenshots, writes steps, starts/stops video, tracks recording state
     offscreen.ts    records the tab to WebM (service workers can't use MediaRecorder)
-    recorder.ts     small window that shows Chrome's share dialog and records what was picked
+    recorder.ts     recorder tab: shows Chrome's share dialog over your browser and records what was picked
     recorder-core.ts  shared MediaRecorder start/pause/stop and saving
   shared/
     describe.ts     turns an interaction into instruction text; detects secret fields; merges click+type

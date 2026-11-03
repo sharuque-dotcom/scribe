@@ -1,5 +1,5 @@
 // The recording engine shared by the tab recorder (offscreen document) and the
-// window/screen recorder (a small extension window): MediaRecorder to WebM, then
+// window/screen recorder (the recorder tab): MediaRecorder to WebM, then
 // the file is indexed and saved to IndexedDB.
 import { ALL_FORMATS, BlobSource, BufferTarget, Conversion, Input, Output, WebMOutputFormat } from 'mediabunny'
 import { putVideo } from '../shared/db'
@@ -12,8 +12,8 @@ let stream: MediaStream | null = null
 let chunks: Blob[] = []
 let mime = 'video/webm'
 
-export async function startRecording(video: MediaTrackConstraints, onEnded?: () => void) {
-  stream = await navigator.mediaDevices.getUserMedia({ audio: false, video })
+export async function startRecording(video: MediaTrackConstraints | MediaStream, onEnded?: () => void) {
+  stream = video instanceof MediaStream ? video : await navigator.mediaDevices.getUserMedia({ audio: false, video })
   // Fires if the user presses Chrome's "Stop sharing" button.
   stream.getVideoTracks()[0].addEventListener('ended', () => onEnded?.())
   mime = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'].find((m) => MediaRecorder.isTypeSupported(m)) ?? 'video/webm'
