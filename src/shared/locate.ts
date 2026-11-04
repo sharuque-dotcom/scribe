@@ -59,14 +59,40 @@ export const MIN_SCORE = 8
 // The best candidate, or -1 if none is good enough. Ties go to the first
 // (candidates are passed in page order, after position has been scored).
 export function pickBest(saved: Locator, cands: Locator[]): number {
-  let best = -1
-  let bestScore = MIN_SCORE - 0.001
+  return rank(saved, cands).index
+}
+
+// The best candidate with its score and the runner-up's, so callers can tell
+// a clear match from a close call.
+export function rank(saved: Locator, cands: Locator[]): { index: number; score: number; runnerUp: number } {
+  let index = -1
+  let score = MIN_SCORE - 0.001
+  let runnerUp = 0
   cands.forEach((c, i) => {
     const s = scoreLocator(saved, c)
-    if (s > bestScore) {
-      best = i
-      bestScore = s
-    }
+    if (s > score) {
+      if (index >= 0) runnerUp = Math.max(runnerUp, score)
+      index = i
+      score = s
+    } else runnerUp = Math.max(runnerUp, s)
   })
-  return best
+  return { index, score: index >= 0 ? score : 0, runnerUp }
 }
+
+// The clues that identify an element. If any of these changed on the live page,
+// the app has changed since the guide was recorded.
+const IDENTITY: (keyof Locator)[] = ['testId', 'id', 'name', 'aria', 'label', 'text', 'placeholder', 'href', 'context']
+
+// Self-repair: when the learner has just done a step on `found` (so it's surely
+// the right element) and its clues differ from the saved ones, the clues to
+// save instead. Kept clues that are now missing on the page are dropped; the
+// recorded position is kept. Returns null when nothing changed.
+export function repairedLocator(saved: Locator, found: Locator): Locator | null {
+  const changed = IDENTITY.some((k) => (saved[k] ?? '') !== (found[k] ?? '') && !(k === 'label' && norm(saved.label) === norm(found.label)))
+  if (!changed) return null
+  return { ...found, pageX: saved.pageX ?? found.pageX, pageY: saved.pageY ?? found.pageY }
+}
+
+// A match strong enough to repair from: well above the minimum and clearly
+// ahead of any other element, so a repair never moves a step to the wrong thing.
+export const confidentMatch = (r: { score: number; runnerUp: number }) => r.score >= MIN_SCORE + 2 && r.score - r.runnerUp >= 3

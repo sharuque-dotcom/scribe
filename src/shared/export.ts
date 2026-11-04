@@ -240,6 +240,9 @@ export async function importGuideJson(text: string): Promise<Guide> {
     createdAt: now,
     updatedAt: now,
     docs: file.guide.docs ?? {},
+    // Health results and repair notes belong to the sender's copy.
+    health: undefined,
+    repaired: undefined,
     steps: file.guide.steps.map((s) => ({
       ...s,
       id: uid(),

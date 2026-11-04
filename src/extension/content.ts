@@ -2,9 +2,10 @@
 // choices and Enter presses into captured steps, and shows a small control bar.
 import { estimateOrigin, monitorOffset, toVideoPoint, toVideoRect, type ScreenGeom } from '../shared/coords'
 import { cleanLabel, looksSensitive, mainLine } from '../shared/describe'
-import type { CapturedEvent, GuideMeState, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
+import type { CapturedEvent, GuideMeState, Locator, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
 import { loadAutoBlur, onAutoBlurChange } from '../shared/autoblur'
-import { locatorOf } from './locator'
+import { findMatch, locatorOf } from './locator'
+import { confidentMatch, repairedLocator } from '../shared/locate'
 import { createPlayer } from './player'
 import { customRules, DEFAULT_AUTO_BLUR, findPii, piiInProgress, type AutoBlurSettings } from '../shared/pii'
 
@@ -108,6 +109,19 @@ function init() {
       return true
     }
     if (msg?.type === 'guide-run') player.run(msg.state as GuideMeState)
+    if (msg?.type === 'guide-check') {
+      // Check this guide: is each element on this page? Repairs only from clear matches.
+      const labelOf = (el: Element) => describeTarget(el).label
+      reply(
+        (msg.locators as (Locator | undefined)[]).map((loc) => {
+          const m = loc ? findMatch(loc, labelOf) : null
+          if (!m || !loc) return { found: false }
+          const fixed = confidentMatch(m) ? repairedLocator(loc, m.locator) : null
+          return fixed ? { found: true, repaired: fixed } : { found: true }
+        }),
+      )
+      return
+    }
     if (msg?.type === 'prepareCapture') {
       // A spare screenshot isn't worth hiding the bar from under the pointer.
       if (msg.optional && bar.hovered()) {

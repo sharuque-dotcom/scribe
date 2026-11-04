@@ -9,6 +9,7 @@ const PATHS: Record<string, string> = {
   sparkle: 'M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z',
   download: 'M12 4v11M7 10l5 5 5-5M5 20h14',
   back: 'M15 18l-6-6 6-6',
+  chevron: 'M6 9l6 6 6-6',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7.1 19.8l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.2 14H3a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 4.2 7.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3.2V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1.3z',
   upload: 'M12 20V9M7 14l5-5 5 5M5 4h14',
   doc: 'M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6',
@@ -72,7 +73,7 @@ export function Modal({ title, onClose, children, wide }: { title: string; onClo
   )
 }
 
-export function Dropdown({ label, icon, children, align = 'right', buttonClass = 'btn-secondary' }: { label: string; icon?: string; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; buttonClass?: string }) {
+export function Dropdown({ label, icon, children, align = 'right', buttonClass = 'btn-secondary', ariaLabel }: { label: string; icon?: string; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; buttonClass?: string; ariaLabel?: string }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -83,7 +84,7 @@ export function Dropdown({ label, icon, children, align = 'right', buttonClass =
   }, [open])
   return (
     <div className="relative" ref={ref}>
-      <button className={buttonClass} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button className={buttonClass} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={ariaLabel} title={ariaLabel}>
         {icon && <Icon name={icon} />}
         {label}
       </button>

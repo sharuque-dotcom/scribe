@@ -2,7 +2,7 @@
 // finds the element again on the live page (when playing). Searches inside
 // open shadow roots too, which apps like Salesforce use for most controls.
 import { cleanLabel } from '../shared/describe'
-import { pickBest, stableId } from '../shared/locate'
+import { rank, stableId } from '../shared/locate'
 import type { Locator } from '../shared/types'
 
 const CANDIDATES =
@@ -88,12 +88,32 @@ const visible = (el: Element) => {
   return s.visibility !== 'hidden' && s.display !== 'none' && Number(s.opacity) > 0.05
 }
 
+export interface Match {
+  el: Element
+  // Its clues as they are now (for self-repair).
+  locator: Locator
+  score: number
+  runnerUp: number
+}
+
 // The element on the live page that best matches the recorded clues, or null.
 // `labelFor` gives the same label StepCrumb would have used when capturing.
-export function findElement(saved: Locator, labelFor: (el: Element) => string): Element | null {
+export function findMatch(saved: Locator, labelFor: (el: Element) => string): Match | null {
   // Only elements of the same kind are worth the full comparison.
   const els = allCandidates().filter((el) => (el.tagName.toLowerCase() === saved.tag || (!!saved.role && el.getAttribute('role') === saved.role)) && visible(el))
   const cands = els.map((el) => locatorOf(el, labelFor(el)))
-  const i = pickBest(saved, cands)
-  return i >= 0 ? els[i] : null
+  const r = rank(saved, cands)
+  return r.index >= 0 ? { el: els[r.index], locator: cands[r.index], score: r.score, runnerUp: r.runnerUp } : null
+}
+
+export const findElement = (saved: Locator, labelFor: (el: Element) => string): Element | null => findMatch(saved, labelFor)?.el ?? null
+
+// Signs that the page is still loading: the document itself, a busy region,
+// a progress bar or spinner on screen.
+export function pageBusy(): boolean {
+  if (document.readyState !== 'complete') return true
+  if (document.querySelector('[aria-busy="true"]')) return true
+  const spinners = document.querySelectorAll('[role="progressbar"], .spinner, .loading, .loader, .skeleton, [class*="spinner"], [class*="Spinner"], [class*="loading"], [class*="skeleton"]')
+  for (const el of spinners) if (visible(el)) return true
+  return false
 }

@@ -164,10 +164,17 @@ export function Library() {
     void refresh()
   }
 
+  const [dropping, setDropping] = useState(false)
   const onImport = async (file?: File) => {
     if (!file) return
     try {
       const g = await importGuideJson(await file.text())
+      // The guide page says what to do with a guide someone shared.
+      try {
+        sessionStorage.setItem('stepcrumb.imported', g.id)
+      } catch {
+        // Not remembered: no note, that's all.
+      }
       location.hash = `#/guide/${g.id}`
     } catch (err) {
       setToast({ text: (err as Error).message || 'Could not import that file.', tone: 'error' })
@@ -186,7 +193,28 @@ export function Library() {
   const toneFor = (id: CaptureMode | 'blank') => TONE[id === 'screenshots' ? 'guide' : id]
 
   return (
-    <div className="mx-auto max-w-6xl px-5 pb-24 pt-10 sm:px-8">
+    <div
+      className="relative mx-auto max-w-6xl px-5 pb-24 pt-10 sm:px-8"
+      onDragOver={(e) => {
+        if (![...e.dataTransfer.types].includes('Files')) return
+        e.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={(e) => e.currentTarget === e.target && setDropping(false)}
+      onDrop={(e) => {
+        e.preventDefault()
+        setDropping(false)
+        void onImport(e.dataTransfer.files[0])
+      }}
+    >
+      {dropping && (
+        <div className="pointer-events-none fixed inset-0 z-40 grid place-items-center bg-accent/10 p-8">
+          <div className="rounded-3xl border-2 border-dashed border-accent bg-surface px-10 py-8 text-center shadow-float">
+            <p className="text-lg font-semibold">Drop the StepCrumb file to import it</p>
+            <p className="mt-1 text-sm text-muted">A guide someone shared with you, ready for Guide me.</p>
+          </div>
+        </div>
+      )}
       <header className="mb-8 flex flex-wrap items-end gap-3">
         <div className="mr-auto">
           <h1 className="text-[34px] font-semibold leading-none tracking-[-0.02em]">Library</h1>
@@ -273,7 +301,7 @@ export function Library() {
           </h2>
           <button className="ml-auto text-sm text-muted hover:text-ink" onClick={() => fileInput.current?.click()}>
             <Icon name="upload" className="mr-1 inline h-4 w-4" />
-            Import
+            Import (or drop a file here)
           </button>
           <button
             className="text-sm text-muted hover:text-ink"

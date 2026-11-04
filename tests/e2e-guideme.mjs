@@ -112,7 +112,7 @@ try {
   // ---- Play: start from the editor's button while on another page ----
   const editor = await ctx.newPage()
   await editor.goto(`chrome-extension://${extId}/editor.html#/guide/${guideId}`)
-  await editor.getByRole('button', { name: 'Guide me' }).click()
+  await editor.getByRole('button', { name: 'Guide me', exact: true }).click()
   await pause(1500)
   check(page === (await waitFor(async () => ctx.pages().find((p) => p.url().includes('localhost:4178')))), 'Guide me uses the tab already on the site')
   let u = await waitFor(() => ui(page))
@@ -176,7 +176,7 @@ try {
   // ---- A step on another page: offer to go there ----
   await page.goto(`${BASE}/dashboard.html`)
   await editor.bringToFront()
-  await editor.getByRole('button', { name: 'Guide me' }).click()
+  await editor.getByRole('button', { name: 'Guide me', exact: true }).click()
   await page.bringToFront()
   const emailIdx = steps.findIndex((s) => s.title.includes('Work email'))
   await jumpTo(emailIdx)
@@ -191,7 +191,7 @@ try {
 
   // ---- Played on another site than it was recorded on (e.g. live vs test) ----
   await editor.bringToFront()
-  await editor.getByRole('button', { name: 'Guide me' }).click()
+  await editor.getByRole('button', { name: 'Guide me', exact: true }).click()
   await page.bringToFront()
   await waitFor(async () => (await index()) === 0)
   await page.goto('http://127.0.0.1:4178/login.html')
@@ -222,7 +222,7 @@ try {
   )
   await page.goto(`${BASE}/login.html`)
   await editor.bringToFront()
-  await editor.getByRole('button', { name: 'Guide me' }).click()
+  await editor.getByRole('button', { name: 'Guide me', exact: true }).click()
   await page.bringToFront()
   const newIdx = steps.findIndex((s) => s.title.includes('New project'))
   await jumpTo(newIdx)

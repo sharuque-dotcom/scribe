@@ -91,6 +91,9 @@ function Popup() {
   const [mode, setMode] = useState<CaptureMode>('screenshots')
   const { plan, pro, ready, lapsed } = usePlan()
   const [justActivated, setJustActivated] = useState(false)
+  // Guides recorded on the page this tab is showing.
+  const [forPage, setForPage] = useState<{ id: string; title: string }[]>([])
+  const [guideError, setGuideError] = useState<string | null>(null)
 
   useEffect(() => {
     send<RecorderState>({ type: 'getState' }).then(setState)
@@ -98,7 +101,10 @@ function Popup() {
     chrome.storage.local.get('recordMode').then(({ recordMode }) => {
       if (recordMode === 'screenshots' || recordMode === 'both' || recordMode === 'video') setMode(recordMode)
     })
-    chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => setCanCapture(!!t?.url && /^https?:/.test(t.url)))
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => {
+      setCanCapture(!!t?.url && /^https?:/.test(t.url))
+      if (t?.url) send<{ id: string; title: string }[]>({ type: 'guides-for-page', url: t.url }).then((g) => setForPage(g ?? []))
+    })
     const on = (msg: { type?: string; state?: RecorderState }) => msg?.type === 'state' && msg.state && setState(msg.state)
     chrome.runtime.onMessage.addListener(on)
     return () => chrome.runtime.onMessage.removeListener(on)
@@ -201,6 +207,47 @@ function Popup() {
                 ? 'Chrome will ask what to share: a tab, a window or your entire screen. Then click through your task. Finish from this popup (StepCrumb icon) or press Alt+Shift+R.'
                 : 'Click through your task as usual. Each click becomes a step with a screenshot. Shortcut: Alt+Shift+R.'}
           </p>
+        </div>
+      )}
+
+      {!state.recording && forPage.length > 0 && (
+        <div className="mt-4 rounded-xl border border-accent/30 bg-accent/5 p-3" aria-label="Guides for this page">
+          <p className="mb-1.5 text-xs font-semibold text-accent">
+            {forPage.length} guide{forPage.length === 1 ? '' : 's'} for this page
+          </p>
+          {forPage.slice(0, 4).map((g) => (
+            <div key={g.id} className="flex items-center gap-1.5 py-1">
+              <span className="min-w-0 flex-1 truncate text-sm" title={g.title}>
+                {g.title}
+              </span>
+              <button
+                className="rounded-md px-2 py-1 text-xs font-medium text-muted hover:bg-surface hover:text-ink"
+                title="Try it with Save, Submit, Pay and similar buttons stopped"
+                onClick={async () => {
+                  const res = await send<{ ok: boolean; error?: string }>({ type: 'guide-start', guideId: g.id, practice: true })
+                  if (res?.ok) window.close()
+                  else setGuideError(res?.error ?? "Guide me couldn't start.")
+                }}
+              >
+                Practice
+              </button>
+              <button
+                className="rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-white hover:bg-accent/90"
+                onClick={async () => {
+                  const res = await send<{ ok: boolean; error?: string }>({ type: 'guide-start', guideId: g.id })
+                  if (res?.ok) window.close()
+                  else setGuideError(res?.error ?? "Guide me couldn't start.")
+                }}
+              >
+                Guide me
+              </button>
+            </div>
+          ))}
+          {guideError && (
+            <p className="mt-1 text-xs text-rec" role="alert">
+              {guideError}
+            </p>
+          )}
         </div>
       )}
 

@@ -7,8 +7,9 @@ import { pixelateRects } from '../shared/redact'
 import { pickedSource } from '../shared/coords'
 import { loadAutoBlur } from '../shared/autoblur'
 import { maskPii, PII_PHRASE, wholePii } from '../shared/pii'
-import { deleteChunks, deleteGuide, deleteImage, getGuide, getImage, putGuide, putImage } from '../shared/db'
-import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, GuideMeState, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
+import { deleteChunks, deleteGuide, deleteImage, getGuide, getImage, listGuides, putGuide, putImage } from '../shared/db'
+import { checkedOf, elementSteps, expectedOf, guidePages, pageKey } from '../shared/guideme'
+import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, GuideMeState, Locator, NRect, RecordSource, RecorderState, RedactSample, Step, StepHealth, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
 
 const IDLE: RecorderState = { recording: false, paused: false, count: 0 }
@@ -20,6 +21,11 @@ async function getState(): Promise<RecorderState> {
 
 async function setState(s: RecorderState) {
   await chrome.storage.session.set({ recorder: s })
+  // While capturing, the capture's badge shows on every tab.
+  if (s.recording) for (const id of [...countedTabs]) {
+    countedTabs.delete(id)
+    await clearPageBadge(id).catch(() => {})
+  }
   await chrome.action.setBadgeBackgroundColor({ color: s.paused ? '#f59e0b' : '#ef4444' })
   await chrome.action.setBadgeText({ text: s.notice ? '!' : s.recording ? (s.paused ? 'II' : String(s.count || 'REC')) : '' })
   const tabs = await chrome.tabs.query({})
@@ -594,6 +600,8 @@ async function finish(openEditor: boolean, reason?: string): Promise<RecorderSta
       guide.status = 'ready'
       guide.updatedAt = Date.now()
       await putGuide(guide)
+      // The icon's count of guides for each page includes this one now.
+      pageIndex = null
       if (guide.steps.length) count('guide_created')
     }
     if (openEditor) {
@@ -642,8 +650,19 @@ async function togglePause(): Promise<RecorderState> {
 
 const guideState = async () => ((await chrome.storage.session.get('guideMe')).guideMe as GuideMeState | undefined) ?? null
 const setGuideState = (g: GuideMeState | null) => (g ? chrome.storage.session.set({ guideMe: g }) : chrome.storage.session.remove('guideMe'))
+// Changes to the playing guide, one at a time: the page sends several messages
+// at once (moved on, on this page, repaired), and each must see the last one's result.
+let guideChain: Promise<unknown> = Promise.resolve()
+function changeGuide<T>(fn: (g: GuideMeState) => Promise<T> | T): Promise<T | null> {
+  const run = guideChain.then(async () => {
+    const g = await guideState()
+    return g ? fn(g) : null
+  })
+  guideChain = run.catch(() => {})
+  return run
+}
 
-async function guideStart(guideId: string): Promise<{ ok: boolean; error?: string }> {
+async function guideStart(guideId: string, opts: { practice?: boolean } = {}): Promise<{ ok: boolean; error?: string }> {
   const guide = await getGuide(guideId)
   if (!guide) return { ok: false, error: 'Guide not found.' }
   if ((await getState()).recording) return { ok: false, error: 'Finish the capture in progress first.' }
@@ -665,7 +684,9 @@ async function guideStart(guideId: string): Promise<{ ok: boolean; error?: strin
     title: guide.title,
     tabId: tab.id!,
     index: 0,
-    steps: guide.steps.map((s) => ({ kind: s.kind, title: s.title, detail: s.detail, action: s.action, url: s.url, locator: s.locator, hasImage: !!s.imageId })),
+    steps: guide.steps.map((s) => ({ stepId: s.id, kind: s.kind, title: s.title, detail: s.detail, action: s.action, url: s.url, locator: s.locator, hasImage: !!s.imageId, expected: expectedOf(s), checked: checkedOf(s) })),
+    practice: !!opts.practice,
+    results: {},
   }
   await setGuideState(state)
   // Start now if the page is ready; a page that's still loading asks when it is.
@@ -673,6 +694,177 @@ async function guideStart(guideId: string): Promise<{ ok: boolean; error?: strin
   chrome.tabs.sendMessage(tab.id!, { type: 'guide-run', state }).catch(() => {})
   return { ok: true }
 }
+
+// Self-repair: the learner just did a step on an element whose clues changed
+// (renamed, new id). Save the new clues, and note it for the guide's author.
+function guideHeal(index: number, locator: Locator) {
+  return changeGuide((g) => healStep(g, index, locator))
+}
+async function healStep(g: GuideMeState, index: number, locator: Locator): Promise<null> {
+  const stepId = g.steps[index]?.stepId
+  if (!stepId) return null
+  const guide = await getGuide(g.guideId)
+  const step = guide?.steps.find((s) => s.id === stepId)
+  if (!guide || !step) return null
+  step.locator = locator
+  const ids = new Set(guide.repaired?.stepIds ?? [])
+  ids.add(stepId)
+  guide.repaired = { stepIds: [...ids], at: Date.now() }
+  await putGuide(guide)
+  // Later steps in this play use the fresh clues too.
+  const steps = g.steps.map((s, i) => (i === index ? { ...s, locator } : s))
+  await setGuideState({ ...g, steps, results: { ...(g.results ?? {}), [index]: 'repaired' } })
+  return null
+}
+
+// How this play went, step by step, for the guide's health score.
+async function saveHealth(g: GuideMeState) {
+  const entries = Object.entries(g.results ?? {})
+  if (!entries.length) return
+  const guide = await getGuide(g.guideId)
+  if (!guide) return
+  const results: Record<string, StepHealth> = {}
+  for (const [i, r] of entries) {
+    const id = g.steps[Number(i)]?.stepId
+    if (id) results[id] = r
+  }
+  guide.health = { at: Date.now(), source: 'play', results }
+  await putGuide(guide)
+}
+
+// "Check this guide": opens each page the guide uses in a background tab and
+// looks for each step's element, without clicking anything. Elements that only
+// appear after an earlier step (a dialog, a menu) can only be checked by playing.
+async function checkGuide(guideId: string): Promise<{ ok: boolean; error?: string }> {
+  const guide = await getGuide(guideId)
+  if (!guide) return { ok: false, error: 'Guide not found.' }
+  if ((await getState()).recording) return { ok: false, error: 'Finish the capture in progress first.' }
+  const byPage = new Map<string, Step[]>()
+  for (const s of elementSteps(guide)) {
+    const k = pageKey(s.url)
+    if (!k || !s.locator) continue
+    byPage.set(k, [...(byPage.get(k) ?? []), s])
+  }
+  if (!byPage.size) return { ok: false, error: 'This guide has no web pages to check.' }
+  const results: Record<string, StepHealth> = {}
+  const win = await chrome.windows.getLastFocused({ windowTypes: ['normal'] }).catch(() => null)
+  for (const [page, steps] of byPage) {
+    const url = steps[0].url!
+    const tab = await chrome.tabs.create({ url, active: false, windowId: win?.id })
+    try {
+      await waitForTab(tab.id!, 20000)
+      await sleep(1500)
+      const now = await chrome.tabs.get(tab.id!)
+      // Sent somewhere else (often a sign-in page): these steps need a play-through.
+      if (pageKey(now.url) !== page) {
+        for (const s of steps) results[s.id] = 'unchecked'
+        continue
+      }
+      await ensureContentScript(tab.id!)
+      const found = (await chrome.tabs
+        .sendMessage(tab.id!, { type: 'guide-check', locators: steps.map((s) => s.locator) })
+        .catch(() => null)) as ({ found: boolean; repaired?: Locator } | null)[] | null
+      steps.forEach((s, i) => {
+        const r = found?.[i]
+        if (!r) results[s.id] = 'unchecked'
+        else if (r.found && r.repaired) {
+          s.locator = r.repaired
+          results[s.id] = 'repaired'
+        } else if (r.found) results[s.id] = 'found'
+        // Only the first step on a page must be there when it opens; later ones
+        // may appear after it.
+        else results[s.id] = i === 0 ? 'missed' : 'unchecked'
+      })
+    } finally {
+      await chrome.tabs.remove(tab.id!).catch(() => {})
+    }
+  }
+  const fresh = await getGuide(guideId)
+  if (!fresh) return { ok: false, error: 'Guide not found.' }
+  const repairedIds = Object.entries(results).filter(([, r]) => r === 'repaired').map(([id]) => id)
+  for (const s of fresh.steps) {
+    const checked = guide.steps.find((x) => x.id === s.id)
+    if (results[s.id] === 'repaired' && checked?.locator) s.locator = checked.locator
+  }
+  if (repairedIds.length) fresh.repaired = { stepIds: [...new Set([...(fresh.repaired?.stepIds ?? []), ...repairedIds])], at: Date.now() }
+  fresh.health = { at: Date.now(), source: 'check', results }
+  await putGuide(fresh)
+  return { ok: true }
+}
+
+function waitForTab(tabId: number, ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const done = () => {
+      chrome.tabs.onUpdated.removeListener(on)
+      clearTimeout(t)
+      resolve()
+    }
+    const on = (id: number, info: { status?: string }) => id === tabId && info.status === 'complete' && done()
+    const t = setTimeout(done, ms)
+    chrome.tabs.onUpdated.addListener(on)
+    chrome.tabs.get(tabId).then((tab) => tab.status === 'complete' && done(), done)
+  })
+}
+
+// ---------- guides for this page ----------
+// The StepCrumb icon shows how many guides cover the page you're on, and the
+// popup lists them. Guides are re-read at most every few seconds.
+let pageIndex: { at: number; guides: { id: string; title: string; pages: Set<string>; updatedAt: number }[] } | null = null
+async function guideIndex() {
+  if (pageIndex && Date.now() - pageIndex.at < 5000) return pageIndex.guides
+  const guides = (await listGuides()).filter((g) => g.status === 'ready')
+  pageIndex = { at: Date.now(), guides: guides.map((g) => ({ id: g.id, title: g.title, pages: guidePages(g), updatedAt: g.updatedAt })).filter((g) => g.pages.size) }
+  return pageIndex.guides
+}
+async function guidesForPage(url: string): Promise<{ id: string; title: string }[]> {
+  const k = pageKey(url)
+  if (!k) return []
+  return (await guideIndex())
+    .filter((g) => g.pages.has(k))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .map(({ id, title }) => ({ id, title }))
+}
+// Tabs showing a guide count, so a capture can clear them (its own badge wins).
+const countedTabs = new Set<number>()
+async function updatePageBadge(tabId: number, url?: string) {
+  if ((await getState()).recording) return
+  const n = url ? (await guidesForPage(url)).length : 0
+  if (n) {
+    countedTabs.add(tabId)
+    await chrome.action.setBadgeBackgroundColor({ tabId, color: '#6366f1' }).catch(() => {})
+    await chrome.action.setBadgeText({ tabId, text: String(n) }).catch(() => {})
+    await chrome.action.setTitle({ tabId, title: `StepCrumb · ${n} guide${n === 1 ? '' : 's'} for this page` }).catch(() => {})
+  } else if (countedTabs.has(tabId)) {
+    countedTabs.delete(tabId)
+    await clearPageBadge(tabId)
+  }
+}
+async function clearPageBadge(tabId: number) {
+  // Clearing the tab's own text lets the general badge (a capture's count) show
+  // again. Chrome can reject these for a tab that has just closed: never let
+  // that get in the way of what called it (starting a capture).
+  try {
+    // Null (documented) makes the tab fall back to the general badge; '' would hide it.
+    await chrome.action.setBadgeText({ tabId, text: null as unknown as string })
+    await chrome.action.setTitle({ tabId, title: chrome.runtime.getManifest().action?.default_title ?? 'StepCrumb' })
+  } catch {
+    // Nothing to clear.
+  }
+}
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status === 'complete' || info.url) void updatePageBadge(tabId, tab.url)
+})
+chrome.tabs.onActivated.addListener(({ tabId }) => {
+  chrome.tabs.get(tabId).then((t) => updatePageBadge(tabId, t.url), () => {})
+})
+chrome.tabs.onRemoved.addListener((tabId) => countedTabs.delete(tabId))
+
+// A step that opens a new tab (a link with target=_blank): Guide me follows it there.
+chrome.tabs.onCreated.addListener((tab) => {
+  void changeGuide(async (g) => {
+    if (tab.openerTabId === g.tabId && tab.id !== undefined) await setGuideState({ ...g, tabId: tab.id })
+  })
+})
 
 // The step's screenshot for "can't find it" moments: small, with any blurs
 // applied and the element outlined.
@@ -748,23 +940,39 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'discard':
         return discard()
       case 'guide-start':
-        return guideStart(msg.guideId as string)
+        return guideStart(msg.guideId as string, { practice: !!msg.practice })
       case 'guide-get': {
         const g = await guideState()
         return g && sender.tab?.id === g.tabId ? g : null
       }
-      case 'guide-advance': {
-        const g = await guideState()
-        if (g) await setGuideState({ ...g, index: msg.index as number })
+      case 'guide-advance':
+        await changeGuide(async (g) => {
+          const results = { ...(g.results ?? {}) }
+          if (msg.result) results[msg.from as number] = msg.result as StepHealth
+          for (const i of (msg.skipped as number[] | undefined) ?? []) results[i] = 'skipped'
+          await setGuideState({ ...g, index: msg.index as number, results, path: msg.back ? undefined : g.path })
+        })
         return null
-      }
-      case 'guide-any-origin': {
-        const g = await guideState()
-        if (g) await setGuideState({ ...g, anyOrigin: true })
+      case 'guide-path':
+        await changeGuide((g) => setGuideState({ ...g, path: msg.path as string }))
         return null
-      }
+      case 'guide-heal':
+        return guideHeal(msg.index as number, msg.locator as Locator)
+      case 'guide-finish':
+        await changeGuide((g) => saveHealth(g))
+        return null
+      case 'guide-check':
+        return checkGuide(msg.guideId as string)
+      case 'guides-for-page':
+        return guidesForPage(msg.url as string)
+      case 'guide-any-origin':
+        await changeGuide((g) => setGuideState({ ...g, anyOrigin: true }))
+        return null
       case 'guide-stop':
-        await setGuideState(null)
+        await changeGuide(async (g) => {
+          await saveHealth(g)
+          await setGuideState(null)
+        })
         return null
       case 'guide-image':
         return guideImage(msg.index as number)

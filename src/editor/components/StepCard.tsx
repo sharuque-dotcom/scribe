@@ -17,6 +17,8 @@ interface Props {
   onDelete: () => void
   onAnnotate: () => void
   onAdjustZoom: () => void
+  // Guide me's last result for this step, when worth showing.
+  health?: 'repaired' | 'missed'
 }
 
 const NOTE_STYLES: Record<NoteStyle, { label: string; cls: string }> = {
@@ -25,7 +27,7 @@ const NOTE_STYLES: Record<NoteStyle, { label: string; cls: string }> = {
   warning: { label: 'Warning', cls: 'border-amber-500 bg-amber-50' },
 }
 
-export function StepCard({ step, number, image, view, first, last, readOnly, onChange, onMove, onDelete, onAnnotate, onAdjustZoom }: Props) {
+export function StepCard({ step, number, image, view, first, last, readOnly, onChange, onMove, onDelete, onAnnotate, onAdjustZoom, health }: Props) {
   const [showDetail, setShowDetail] = useState(!!step.detail)
 
   const tools = !readOnly && (
@@ -87,6 +89,14 @@ export function StepCard({ step, number, image, view, first, last, readOnly, onC
         <span className="mt-px grid h-8 w-8 flex-none place-items-center rounded-full bg-ember text-sm font-bold text-white shadow-[0_2px_6px_-1px_rgb(249_115_22/0.5)] ring-4 ring-ember/10">{number}</span>
         <div className="min-w-0 flex-1">
           <AutoText value={step.title} onChange={(title) => onChange({ title })} placeholder="Describe this step" ariaLabel={`Step ${number} text`} className="text-[16px] font-semibold leading-snug" />
+          {health && (
+            <span
+              className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${health === 'repaired' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-900'}`}
+              title={health === 'repaired' ? 'The app changed here; Guide me updated how it finds this step.' : "Guide me couldn't find this on the page last time. Check the step still matches the app."}
+            >
+              {health === 'repaired' ? 'Repaired by Guide me' : 'Guide me couldn’t find this'}
+            </span>
+          )}
           {showDetail ? (
             <AutoText value={step.detail ?? ''} onChange={(detail) => onChange({ detail })} placeholder="Add more detail (optional)" ariaLabel={`Step ${number} detail`} className="mt-1 text-sm text-muted" autoFocus={!step.detail} />
           ) : (

@@ -131,6 +131,10 @@ export interface Guide {
   video?: GuideVideo
   // 'video' means video only: steps carry caption text and timing but no screenshots.
   mode?: CaptureMode
+  // Guide me: the last play or check, step by step.
+  health?: GuideHealth
+  // Guide me: steps it repaired after the app changed, not yet seen by the author.
+  repaired?: { stepIds: string[]; at: number }
 }
 
 // ---------- video ----------
@@ -289,6 +293,8 @@ export const uid = (): string =>
 
 // Guide me: a guide being played on the live website.
 export interface GuideMeStep {
+  // The guide step it plays (results and repairs are saved against it).
+  stepId?: string
   kind: StepKind
   title: string
   detail?: string
@@ -296,6 +302,21 @@ export interface GuideMeStep {
   url?: string
   locator?: Locator
   hasImage: boolean
+  // What the guide typed or chose, read from the step text ("Select "Customer" from…").
+  // Unset for secret and personal values, which the text doesn't quote.
+  expected?: string
+  // For checkbox steps: whether the guide ticked (true) or cleared (false) it.
+  checked?: boolean
+}
+
+// How a step went when a guide was played or checked.
+export type StepHealth = 'found' | 'repaired' | 'missed' | 'skipped' | 'unchecked'
+
+export interface GuideHealth {
+  at: number
+  // 'play': someone played it with Guide me. 'check': Check this guide looked for each element.
+  source: 'play' | 'check'
+  results: Record<string, StepHealth>
 }
 
 export interface GuideMeState {
@@ -308,4 +329,11 @@ export interface GuideMeState {
   // The learner chose to play it on another site than the one it was recorded
   // on (e.g. live instead of the test system): match pages by path only.
   anyOrigin?: boolean
+  // Practice: final actions (Save, Submit, Delete, Pay…) are stopped before they
+  // reach the app, and the step still counts as done.
+  practice?: boolean
+  // The page the current step was being shown on, to notice going off track.
+  path?: string
+  // How each step went in this play (by index).
+  results?: Record<number, StepHealth>
 }

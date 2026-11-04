@@ -8,9 +8,10 @@ import { stepNumbers } from '../../shared/templates'
 import { guideViews, type StepView } from '../../shared/zoom'
 import type { DocKind, Step, StepKind } from '../../shared/types'
 import { uid } from '../../shared/types'
-import { Dropdown, Icon, isExtension, timeAgo, Toast, type ToastData, AutoText } from '../ui'
+import { Dropdown, Icon, isExtension, Modal, timeAgo, Toast, type ToastData, AutoText } from '../ui'
 import { useGuide } from '../useGuide'
-import { canGuideMe, startGuideMe } from '../guideMe'
+import { canGuideMe, checkGuide, startGuideMe } from '../guideMe'
+import { healthSummary } from '../../shared/guideme'
 import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
 import { openSettings } from '../actions'
@@ -67,6 +68,24 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const nums = useMemo(() => (guide ? stepNumbers(guide) : new Map<string, number>()), [guide])
   const views = useMemo(() => (guide ? guideViews(guide, images) : new Map<string, StepView>()), [guide, images])
   const [annotTool, setAnnotTool] = useState<Tool>('box')
+  const [checking, setChecking] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const health = guide ? healthSummary(guide) : null
+  // Just imported from a shared file: say what to do with it.
+  const [imported, setImported] = useState(() => {
+    try {
+      return sessionStorage.getItem('stepcrumb.imported') === id
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('stepcrumb.imported') === id) sessionStorage.removeItem('stepcrumb.imported')
+    } catch {
+      // Nothing to clear.
+    }
+  }, [id])
   const shotCount = guide ? guide.steps.filter((s) => s.imageId).length : 0
   const blurCount = guide ? guide.steps.reduce((n, s) => n + s.annotations.filter((a) => a.type === 'blur').length, 0) : 0
 
@@ -277,16 +296,68 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
               />
             </div>
             {isExtension && canGuideMe(guide) && (
-              <button
-                className="btn-secondary rounded-xl"
-                title="Play this guide on the real website, step by step"
-                onClick={async () => {
-                  const err = await startGuideMe(guide.id)
-                  if (err) setToast({ text: err, tone: 'error' })
-                }}
-              >
-                <Icon name="play" /> Guide me
-              </button>
+              <div className="flex">
+                <button
+                  className="btn-secondary rounded-l-xl rounded-r-none"
+                  title="Play this guide on the real website, step by step"
+                  onClick={async () => {
+                    const err = await startGuideMe(guide.id)
+                    if (err) setToast({ text: err, tone: 'error' })
+                  }}
+                >
+                  <Icon name="play" /> Guide me
+                </button>
+                <Dropdown label="" icon="chevron" buttonClass="btn-secondary -ml-px h-full rounded-l-none rounded-r-xl px-2" ariaLabel="Guide me options">
+                  {(close) => (
+                    <div className="w-72">
+                      <button
+                        className="menu-item items-start"
+                        onClick={async () => {
+                          close()
+                          const err = await startGuideMe(guide.id, { practice: true })
+                          if (err) setToast({ text: err, tone: 'error' })
+                        }}
+                      >
+                        <Icon name="cap" />
+                        <span>
+                          <span className="block font-medium">Practice</span>
+                          <span className="block text-xs text-muted">Play it with Save, Submit, Pay and similar buttons stopped, so nothing is changed.</span>
+                        </span>
+                      </button>
+                      <button
+                        className="menu-item items-start"
+                        disabled={checking}
+                        onClick={async () => {
+                          close()
+                          setChecking(true)
+                          const err = await checkGuide(guide.id)
+                          setChecking(false)
+                          setToast(err ? { text: err, tone: 'error' } : { text: 'Checked. The result is at the top of the steps.' })
+                        }}
+                      >
+                        <Icon name="check" />
+                        <span>
+                          <span className="block font-medium">Check this guide</span>
+                          <span className="block text-xs text-muted">Opens each page in the background and looks for every button and field. Nothing is clicked.</span>
+                        </span>
+                      </button>
+                      <button
+                        className="menu-item items-start"
+                        onClick={() => {
+                          close()
+                          setSharing(true)
+                        }}
+                      >
+                        <Icon name="upload" />
+                        <span>
+                          <span className="block font-medium">Share for Guide me</span>
+                          <span className="block text-xs text-muted">Send a teammate a file they can play. No account or IT needed.</span>
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </Dropdown>
+              </div>
             )}
             {(tab === 'steps' || tab === 'preview') && (
               <Dropdown label="Export" icon="download" buttonClass="btn-primary rounded-xl">
@@ -390,8 +461,38 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                       {t}
                     </span>
                   ))}
+                  {health && health.total > 0 && (
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium ${health.missed ? 'border-amber-300 bg-amber-50 text-amber-900' : 'border-green-300 bg-green-50 text-green-800'}`}
+                      title={`${health.source === 'check' ? 'Checked' : 'Played with Guide me'} ${timeAgo(health.at)}${health.unchecked ? `. ${health.unchecked} step${health.unchecked === 1 ? '' : 's'} could only be checked by playing it.` : ''}`}
+                    >
+                      <Icon name="play" className="h-3.5 w-3.5" />
+                      Guide me: {health.ok} of {health.total} steps OK
+                    </span>
+                  )}
+                  {checking && <span className="self-center px-1 text-muted">Checking the guide on the live pages…</span>}
                   {!readOnly && nums.size > 0 && <span className="self-center px-1 text-muted">Click a screenshot to annotate it</span>}
                 </div>
+                {imported && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm" role="status">
+                    <Icon name="play" className="h-4 w-4 flex-none text-accent" />
+                    <span className="flex-1">Imported. Press <b>Guide me</b> to be walked through it on the website, or choose <b>Practice</b> from its menu to try it without changing anything.</span>
+                    <button className="font-semibold underline underline-offset-2" onClick={() => setImported(false)}>
+                      Got it
+                    </button>
+                  </div>
+                )}
+                {guide.repaired && guide.repaired.stepIds.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900" role="status">
+                    <Icon name="check" className="h-4 w-4 flex-none" />
+                    <span className="flex-1">
+                      Guide me repaired {guide.repaired.stepIds.length} step{guide.repaired.stepIds.length === 1 ? '' : 's'} after the app changed. They're marked below.
+                    </span>
+                    <button className="font-semibold underline underline-offset-2" onClick={() => update((g) => ({ ...g, repaired: undefined }))}>
+                      Got it
+                    </button>
+                  </div>
+                )}
               </div>
               {!readOnly && nums.size > 0 && (
                 <Dropdown label="Screenshots" icon="image">
@@ -470,6 +571,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                     setAnnotTool('crop')
                     setAnnotating(s.id)
                   }}
+                  health={guide.repaired?.stepIds.includes(s.id) ? 'repaired' : guide.health?.results[s.id] === 'missed' ? 'missed' : undefined}
                 />
                 {s.kind === 'step' && !s.imageId && !readOnly && (
                   <button
@@ -531,6 +633,27 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
             setAnnotating(null)
           }}
         />
+      )}
+      {sharing && (
+        <Modal title="Share for Guide me" onClose={() => setSharing(false)}>
+          <div className="space-y-4 text-sm">
+            <p>Send this file to a teammate (by email, Teams, Slack or a shared drive). They don't need an account, and nothing is installed for them except StepCrumb.</p>
+            <ol className="list-decimal space-y-1.5 pl-5 text-muted">
+              <li>They open StepCrumb's library and drop the file on it (or click Import).</li>
+              <li>The guide opens. They press <b className="text-ink">Guide me</b>, or <b className="text-ink">Practice</b> to try it without changing anything.</li>
+            </ol>
+            <p className="text-xs text-muted">The file includes the steps and the screenshots. Passwords are blurred for good, but other blurs travel as edits the person could remove, so don't share screenshots that show anything they shouldn't see.</p>
+            <button
+              className="btn-primary w-full rounded-xl"
+              onClick={async () => {
+                await exportGuide('json')
+                setSharing(false)
+              }}
+            >
+              <Icon name="download" /> Download the file
+            </button>
+          </div>
+        </Modal>
       )}
       <Toast toast={toast} onDone={dismissToast} />
     </div>
