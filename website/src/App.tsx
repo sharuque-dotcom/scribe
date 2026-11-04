@@ -4,9 +4,11 @@ import { reducedMotion, useReveal } from './motion'
 import { Compare, Faq, FinalCta, Footer, Founder, Pricing, Privacy, UseCases } from './sections/Bottom'
 import { Features } from './sections/Features'
 import { Hero, HowItWorks, Nav, Strip } from './sections/Top'
+import { TrailDivider, useCrumbClicks } from './sections/Crumbs'
 
 export function App() {
   useReveal()
+  useCrumbClicks()
   useEffect(() => {
     if (reducedMotion()) return
     const ctx = gsap.context(() => {
@@ -23,13 +25,16 @@ export function App() {
           <Strip />
         </div>
         <HowItWorks />
+        <TrailDivider />
         <Features />
         <UseCases />
         <Privacy />
+        <TrailDivider color="#818CF8" />
         <Compare />
         <Pricing />
         <Faq />
         <Founder />
+        <TrailDivider />
         <FinalCta />
       </main>
       <Footer />

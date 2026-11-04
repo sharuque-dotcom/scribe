@@ -11,6 +11,7 @@ export default defineConfig({
         privacy: resolve(import.meta.dirname, 'privacy.html'),
         terms: resolve(import.meta.dirname, 'terms.html'),
         thanks: resolve(import.meta.dirname, 'thanks.html'),
+        'compare-scribe': resolve(import.meta.dirname, 'compare/stepcrumb-vs-scribe.html'),
       },
     },
   },

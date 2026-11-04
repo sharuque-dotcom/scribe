@@ -303,7 +303,8 @@ export function FinalCta() {
   return (
     <section className="px-3 pb-16 sm:px-8">
       <div className="art art-dusk mx-auto max-w-[1240px] rounded-[40px] px-6 py-24 text-center text-white sm:px-12" data-reveal>
-        <h2 className="display mx-auto max-w-3xl text-[44px] sm:text-[72px]">Your next SOP is one click-through away.</h2>
+        <h2 className="display mx-auto max-w-3xl text-[44px] sm:text-[72px]">Leave a trail anyone can follow.</h2>
+        <p className="mx-auto mt-5 max-w-xl text-[18px] text-white/85">Your next SOP, training module and video are one click-through away.</p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <a href={CONFIG.chromeStoreUrl} className="btn bg-white px-7 py-3.5 text-[16px] text-ink hover:-translate-y-0.5 hover:shadow-float">
             <ChromeIcon /> Add to Chrome, it's free
@@ -321,13 +322,16 @@ export function Footer() {
   return (
     <footer className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-6 px-5 py-10 text-[14px] text-soft sm:px-8">
       <Logo />
-      <span>© {new Date().getFullYear()} StepCrumb</span>
+      <span>© {new Date().getFullYear()} StepCrumb · Leave a trail anyone can follow.</span>
       <nav className="ml-auto flex flex-wrap gap-6">
         <a href="/privacy.html" className="hover:text-ink">
           Privacy
         </a>
         <a href="/terms.html" className="hover:text-ink">
           Terms
+        </a>
+        <a href="/compare/stepcrumb-vs-scribe" className="hover:text-ink">
+          StepCrumb vs Scribe
         </a>
         <a href={`mailto:${CONFIG.contactEmail}`} className="hover:text-ink">
           Contact

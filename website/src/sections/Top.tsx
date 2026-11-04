@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CONFIG } from '../config'
 import { HeroDemo } from './HeroDemo'
+import { CrumbMark, HeroTrail } from './Crumbs'
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
@@ -105,6 +106,7 @@ export function Hero() {
         <p className="mt-4 text-[13px] text-soft" data-hero>
           Chrome & Edge · Windows, Mac, Linux, ChromeOS · No account needed
         </p>
+        <HeroTrail />
       </div>
       <div className="mx-auto mt-14 max-w-[1180px] px-3 sm:px-8" data-hero>
         <HeroDemo />
@@ -147,12 +149,15 @@ export function HowItWorks() {
   return (
     <section id="how" className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
       <div className="mx-auto max-w-3xl text-center" data-reveal>
-        <p className="eyebrow mb-4">How it works</p>
-        <h2 className="display text-[44px] sm:text-[64px]">One click-through. Four deliverables.</h2>
+        <p className="eyebrow mb-4 inline-flex items-center gap-3"><CrumbMark className="h-4 w-10" />How it works</p>
+        <h2 className="display text-[44px] sm:text-[64px]">Every click leaves a crumb.</h2>
+        <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-soft">StepCrumb follows the trail you leave and turns it into four things people can follow: a guide, an SOP, a training module and a narrated video.</p>
       </div>
-      <div className="mt-16 grid gap-6 md:grid-cols-3">
+      <div className="relative mt-16 grid gap-6 md:grid-cols-3">
+        <div className="pointer-events-none absolute left-[16.6%] right-[16.6%] top-[-29px] hidden h-[3px] bg-[radial-gradient(circle,rgba(21,20,18,.35)_1.2px,transparent_1.6px)] bg-[length:9px_3px] md:block" aria-hidden />
         {HOW.map(([t, d, art], i) => (
-          <div key={t} className="group" data-reveal>
+          <div key={t} className="group relative" data-reveal>
+            <span className={`absolute left-1/2 top-[-38px] z-10 hidden h-5 w-5 -translate-x-1/2 rounded-full ring-4 ring-paper md:block ${i === 1 ? 'bg-[#818CF8]' : 'bg-ember'}`} aria-hidden />
             <div className={`art ${art} grid aspect-[4/3] place-items-center rounded-[28px]`}>
               <span className="display text-[120px] text-white/90 transition-transform duration-500 group-hover:scale-110">{i + 1}</span>
             </div>
