@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Screenshot checks</title>
+<style>
+  body { margin: 0; font: 16px system-ui; }
+  .top { height: 1400px; background: rgb(220, 30, 30); color: #fff; padding: 20px; }
+  .bottom { height: 1400px; background: rgb(30, 170, 60); padding: 20px; }
+  #open { position: fixed; top: 20px; right: 20px; padding: 8px 14px; }
+  /* A menu that fades in slowly, like many apps' dropdowns. */
+  #menu { position: fixed; top: 70px; right: 20px; width: 260px; background: rgb(0, 0, 255); color: #fff; border-radius: 8px; opacity: 0; transition: opacity 700ms linear; pointer-events: none; }
+  #menu.open { opacity: 1; pointer-events: auto; }
+  #menu div { padding: 14px; }
+  #request { margin-top: 300px; padding: 14px 20px; font-size: 18px; }
+  #modal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, .85); color: #fff; }
+  #modal.open { display: grid; place-items: center; }
+</style>
+</head>
+<body>
+  <div class="top">Top of the page (red)</div>
+  <div class="bottom"><button id="request">Request pilot access</button></div>
+  <button id="open">Workspace</button>
+  <div id="menu" role="menu">
+    <div role="menuitem" id="item"><span style="display:inline-block;width:20px">E</span><br />Erth's Lovable</div>
+    <div role="menuitem">Sharuque's Lovable</div>
+  </div>
+  <div id="modal">Thanks! We'll be in touch.</div>
+  <script>
+    document.getElementById('open').addEventListener('click', () => document.getElementById('menu').classList.add('open'))
+    document.getElementById('item').addEventListener('click', () => document.getElementById('menu').classList.remove('open'))
+    document.getElementById('request').addEventListener('click', () => document.getElementById('modal').classList.add('open'))
+  </script>
+</body>
+</html>

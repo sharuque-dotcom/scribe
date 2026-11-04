@@ -352,11 +352,12 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const busy = gen !== null || exporting !== null
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-24 pt-6">
+    <div className="mx-auto max-w-[1360px] px-5 pb-24 pt-6 sm:px-8">
       <div className="flex flex-col gap-6 lg:flex-row">
-        {/* Player (stays in view while the settings column scrolls) */}
-        <div className="min-w-0 flex-1 self-start lg:sticky lg:top-20">
-          <div ref={playerBox} className="player-box overflow-hidden rounded-xl border border-line bg-black shadow-soft">
+        {/* Player on a dark stage (stays in view while the settings panel scrolls) */}
+        <div className="min-w-0 flex-1 self-start lg:sticky lg:top-36">
+          <div className="rounded-[24px] bg-[#151412] p-3 shadow-float sm:p-4">
+          <div ref={playerBox} className="player-box overflow-hidden rounded-[14px] bg-black ring-1 ring-white/10">
             <canvas
               ref={canvas}
               width={W}
@@ -369,8 +370,8 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
           </div>
           {url && <video ref={videoEl} src={url} muted playsInline preload="auto" className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0" onLoadedData={() => seek(outT)} />}
 
-          <div className="mt-3 flex items-center gap-3">
-            <button className="btn-primary w-24" onClick={() => setPlaying((p) => !p)} disabled={!url || busy} aria-label={playing ? 'Pause' : 'Play'}>
+          <div className="mt-3 flex items-center gap-3 px-1 text-white">
+            <button className="btn w-24 rounded-xl bg-white text-[#151412] hover:bg-white/90" onClick={() => setPlaying((p) => !p)} disabled={!url || busy} aria-label={playing ? 'Pause' : 'Play'}>
               <Icon name={playing ? 'pause' : 'play'} /> {playing ? 'Pause' : 'Play'}
             </button>
             <input
@@ -383,14 +384,14 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 setPlaying(false)
                 seek(Number(e.target.value))
               }}
-              className="flex-1 accent-indigo-600"
+              className="flex-1 accent-orange-500"
               aria-label="Seek"
             />
-            <span className="w-28 text-right text-xs tabular-nums text-muted">
+            <span className="w-28 text-right text-xs tabular-nums text-white/60">
               {fmt(outT)} / {fmt(plan.map.outDuration)}
             </span>
             <button
-              className="btn-secondary px-3"
+              className="btn rounded-xl bg-white/10 px-3 text-white hover:bg-white/20"
               onClick={() => void playerBox.current?.requestFullscreen().catch(() => {})}
               disabled={!url}
               title="Watch full screen (click the video to play or pause, Esc to leave)"
@@ -401,9 +402,10 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
               </svg>
             </button>
           </div>
+          </div>
 
           {/* Timeline */}
-          <div className="mt-4">
+          <div className="mt-5 rounded-[20px] border border-line bg-surface p-4">
             <div className="mb-1 flex items-center justify-between text-xs text-muted">
               <span>Timeline · drag zoom blocks to move them, drag their edges to resize, drag the white handles to trim</span>
               <button
@@ -419,7 +421,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             </div>
             <div
               ref={strip}
-              className="relative h-20 select-none rounded-lg border border-line bg-raised"
+              className="relative h-20 select-none rounded-xl border border-line bg-canvas"
               onPointerDown={(e) => {
                 const r = e.currentTarget.getBoundingClientRect()
                 const src = ((e.clientX - r.left) / r.width) * video.duration
@@ -436,7 +438,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 .filter((s): s is Step & { time: number } => s.kind === 'step' && typeof s.time === 'number')
                 .map((s, i) => (
                   <div key={s.id} className="absolute top-1.5 -translate-x-1/2" style={{ left: pct(s.time) }} title={s.title}>
-                    <div className="grid h-5 w-5 place-items-center rounded-full bg-orange-500 text-[10px] font-bold text-white">{i + 1}</div>
+                    <div className="grid h-5 w-5 place-items-center rounded-full bg-ember text-[10px] font-bold text-white ring-2 ring-white">{i + 1}</div>
                   </div>
                 ))}
               {/* Zooms */}
@@ -494,9 +496,22 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
         </div>
 
         {/* Settings */}
-        <aside className="w-full space-y-4 lg:w-80">
-          <section className="card space-y-3 p-4 text-sm">
-            <h3 className="font-semibold">Export</h3>
+        <aside className="w-full self-start overflow-hidden rounded-[20px] border border-line bg-surface shadow-soft lg:sticky lg:top-36 lg:max-h-[calc(100vh-10rem)] lg:w-[340px] lg:overflow-auto">
+          <nav className="sticky top-0 z-10 flex gap-1 border-b border-line bg-surface/95 p-2 backdrop-blur" aria-label="Video settings">
+            {[
+              ['export', 'Export'],
+              ['look', 'Look'],
+              ['voice', 'Voice'],
+              ['captions', 'Captions'],
+            ].map(([id, label]) => (
+              <button key={id} className="flex-1 rounded-lg px-2 py-1.5 text-xs font-medium text-muted hover:bg-raised hover:text-ink" onClick={() => document.getElementById(`vs-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="divide-y divide-line">
+          <section id="vs-export" className="scroll-mt-14 space-y-3 p-5 text-sm">
+            <h3 className="text-[15px] font-semibold">Export</h3>
             {askExport && (
               <div className="rounded-md bg-amber-50 p-2.5 text-xs text-amber-900" role="alert">
                 <p className="mb-2">{missingVoice} line{missingVoice === 1 ? '' : 's'} still {missingVoice === 1 ? 'has' : 'have'} no voice. Their captions will show without narration.</p>
@@ -550,8 +565,8 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             )}
           </section>
 
-          <section className="card space-y-3 p-4 text-sm">
-            <h3 className="font-semibold">Look</h3>
+          <section id="vs-look" className="scroll-mt-14 space-y-3 p-5 text-sm">
+            <h3 className="text-[15px] font-semibold">Look</h3>
             <div>
               <span className="mb-1 block">Frame</span>
               <div className="grid grid-cols-2 gap-1 rounded-lg bg-raised p-1" role="radiogroup" aria-label="Frame">
@@ -641,8 +656,8 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             )}
           </section>
 
-          <section className="card space-y-3 p-4 text-sm">
-            <h3 className="font-semibold">Voiceover</h3>
+          <section id="vs-voice" className="scroll-mt-14 space-y-3 p-5 text-sm">
+            <h3 className="text-[15px] font-semibold">Voiceover</h3>
             <label className="flex items-center justify-between gap-3">
               <span>Voiceover in video</span>
               <input type="checkbox" checked={settings.voice} onChange={(e) => patchSettings({ voice: e.target.checked })} className="accent-indigo-600" aria-label="Voiceover" />
@@ -688,8 +703,8 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             <p className="text-xs text-muted">Free voice that runs on this computer. The first time, it downloads about 90 MB. If a line runs long, the video pauses on that frame until it finishes.</p>
           </section>
 
-          <section className="card p-4 text-sm">
-            <h3 className="mb-2 font-semibold">Captions and narration</h3>
+          <section id="vs-captions" className="scroll-mt-14 p-5 text-sm">
+            <h3 className="mb-2 text-[15px] font-semibold">Captions and narration</h3>
             <ol className="space-y-2">
               {steps
                 .filter((s) => s.kind === 'step' && typeof s.time === 'number')
@@ -715,6 +730,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             </ol>
             <p className="mt-2 text-xs text-muted">Leave a line empty to use the step text. Changes here don't change the written guide.</p>
           </section>
+          </div>
         </aside>
       </div>
     </div>

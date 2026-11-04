@@ -8,13 +8,12 @@ import { stepNumbers } from '../../shared/templates'
 import { guideViews, type StepView } from '../../shared/zoom'
 import type { DocKind, Step, StepKind } from '../../shared/types'
 import { uid } from '../../shared/types'
-import { Dropdown, Icon, isExtension, Toast, type ToastData, AutoText } from '../ui'
+import { Dropdown, Icon, isExtension, timeAgo, Toast, type ToastData, AutoText } from '../ui'
 import { useGuide } from '../useGuide'
 import { canGuideMe, startGuideMe } from '../guideMe'
 import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
-import { SettingsDialog } from './Settings'
-import { PlanBadge } from './PlanBadge'
+import { openSettings } from '../actions'
 import { exportFeature, FEATURES } from '../../shared/plans'
 import { usePlan } from '../usePlan'
 import { lockedToast } from '../upgrade'
@@ -58,7 +57,6 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const branded = !can('pdfNoBranding')
   const [annotating, setAnnotating] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastData | null>(null)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [polishing, setPolishing] = useState(false)
   const [rendered, setRendered] = useState<Rendered | null>(null)
   const orphanImage = useRef<string | null>(null)
@@ -69,6 +67,31 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const nums = useMemo(() => (guide ? stepNumbers(guide) : new Map<string, number>()), [guide])
   const views = useMemo(() => (guide ? guideViews(guide, images) : new Map<string, StepView>()), [guide, images])
   const [annotTool, setAnnotTool] = useState<Tool>('box')
+  const shotCount = guide ? guide.steps.filter((s) => s.imageId).length : 0
+  const blurCount = guide ? guide.steps.reduce((n, s) => n + s.annotations.filter((a) => a.type === 'blur').length, 0) : 0
+
+  // The step nearest the middle of the screen, for the Contents rail.
+  const [inView, setInView] = useState<string | null>(null)
+  useEffect(() => {
+    if (tab !== 'steps') return
+    const on = () => {
+      const mid = innerHeight / 2
+      let best: string | null = null
+      let bestD = Infinity
+      document.querySelectorAll<HTMLElement>('[id^="step-"]').forEach((el) => {
+        const r = el.getBoundingClientRect()
+        const d = r.top <= mid && r.bottom >= mid ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid))
+        if (d < bestD) {
+          bestD = d
+          best = el.id.slice(5)
+        }
+      })
+      setInView(best)
+    }
+    on()
+    addEventListener('scroll', on, { passive: true })
+    return () => removeEventListener('scroll', on)
+  }, [tab, guide?.steps.length])
 
   // Flattened screenshots are needed by the preview, documents and exports.
   useEffect(() => {
@@ -160,7 +183,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
   const polish = async () => {
     const settings = loadSettings()
     if (!settings.apiKey) {
-      setSettingsOpen(true)
+      openSettings()
       return
     }
     setPolishing(true)
@@ -229,81 +252,85 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
 
   return (
     <div className="min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-2.5">
-          <a href="#/" className="icon-btn" title="All guides" aria-label="All guides">
-            <Icon name="back" />
-          </a>
-          <input
-            className="min-w-0 flex-1 truncate rounded-md bg-transparent px-2 py-1 text-[15px] font-semibold outline-none hover:bg-raised focus:bg-raised"
-            value={guide.title}
-            onChange={(e) => update((g) => ({ ...g, title: e.target.value }))}
-            aria-label="Guide title"
-          />
-          <nav className="hidden items-center gap-1 rounded-lg bg-raised p-1 md:flex">
+      {/* Header: where you are, the guide's name, its views, and the two main actions. */}
+      <header className="sticky top-0 z-20 border-b border-line bg-canvas/90 backdrop-blur-md">
+        <div className="mx-auto max-w-6xl px-5 pt-4 sm:px-8">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <nav className="mb-0.5 flex items-center gap-1.5 text-[13px] text-muted" aria-label="Breadcrumb">
+                <a href="#/" className="hover:text-ink">
+                  Library
+                </a>
+                <span aria-hidden>›</span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: guide.mode === 'video' && guide.video ? '#7c3aed' : guide.video ? '#ea580c' : '#2563eb' }} />
+                  {guide.mode === 'video' && guide.video ? 'Video' : guide.video ? 'Guide + video' : 'Guide'}
+                </span>
+                <span aria-hidden>·</span>
+                <span>Edited {timeAgo(guide.updatedAt)}</span>
+              </nav>
+              <input
+                className="-ml-2 w-full min-w-0 truncate rounded-lg bg-transparent px-2 py-0.5 text-[22px] font-semibold tracking-[-0.01em] outline-none hover:bg-ink/[0.04] focus:bg-surface focus:ring-2 focus:ring-accent/20"
+                value={guide.title}
+                onChange={(e) => update((g) => ({ ...g, title: e.target.value }))}
+                aria-label="Guide title"
+              />
+            </div>
+            {isExtension && canGuideMe(guide) && (
+              <button
+                className="btn-secondary rounded-xl"
+                title="Play this guide on the real website, step by step"
+                onClick={async () => {
+                  const err = await startGuideMe(guide.id)
+                  if (err) setToast({ text: err, tone: 'error' })
+                }}
+              >
+                <Icon name="play" /> Guide me
+              </button>
+            )}
+            {(tab === 'steps' || tab === 'preview') && (
+              <Dropdown label="Export" icon="download" buttonClass="btn-primary rounded-xl">
+                {(close) =>
+                  (
+                    [
+                      ['pdf', branded ? 'PDF (with StepCrumb footer)' : 'PDF (print / save as PDF)'],
+                      ['docx', 'Word (.docx)'],
+                      ['html', 'HTML page'],
+                      ['md', 'Markdown (.md)'],
+                      ['json', 'StepCrumb file (share for Guide me, or backup)'],
+                    ] as const
+                  ).map(([f, label]) => (
+                    <button
+                      key={f}
+                      className="menu-item"
+                      onClick={() => {
+                        close()
+                        void exportGuide(f)
+                      }}
+                    >
+                      {label}
+                      {exportFeature(f) && !can(exportFeature(f)!) && <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" title="StepCrumb Pro">Pro</span>}
+                    </button>
+                  ))
+                }
+              </Dropdown>
+            )}
+          </div>
+          <nav className="-mb-px mt-3 flex gap-1 overflow-x-auto" aria-label="Views">
             {TABS.map((t) => (
               <a
                 key={t.id}
                 href={`#/guide/${guide.id}${t.id === 'steps' ? '' : '/' + t.id}`}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium ${tab === t.id ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink'}`}
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={`flex flex-none items-center gap-1.5 border-b-2 px-3 pb-2.5 pt-1 text-sm font-medium transition-colors ${tab === t.id ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink'}`}
               >
                 <Icon name={t.icon} />
                 {t.label}
+                {t.id === 'video' && guide.video && <span className="h-1.5 w-1.5 rounded-full bg-ember" title="This guide has a video" />}
               </a>
             ))}
           </nav>
-          {isExtension && canGuideMe(guide) && (
-            <button
-              className="btn-secondary"
-              title="Play this guide on the real website, step by step"
-              onClick={async () => {
-                const err = await startGuideMe(guide.id)
-                if (err) setToast({ text: err, tone: 'error' })
-              }}
-            >
-              <Icon name="play" /> Guide me
-            </button>
-          )}
-          <PlanBadge onOpen={() => setSettingsOpen(true)} />
-          <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings">
-            <Icon name="settings" />
-          </button>
-          {(tab === 'steps' || tab === 'preview') && (
-            <Dropdown label="Export" icon="download">
-              {(close) =>
-                (
-                  [
-                    ['pdf', branded ? 'PDF (with StepCrumb footer)' : 'PDF (print / save as PDF)'],
-                    ['docx', 'Word (.docx)'],
-                    ['html', 'HTML page'],
-                    ['md', 'Markdown (.md)'],
-                    ['json', 'StepCrumb file (share for Guide me, or backup)'],
-                  ] as const
-                ).map(([f, label]) => (
-                  <button
-                    key={f}
-                    className="menu-item"
-                    onClick={() => {
-                      close()
-                      void exportGuide(f)
-                    }}
-                  >
-                    {label}
-                    {exportFeature(f) && !can(exportFeature(f)!) && <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" title="StepCrumb Pro">Pro</span>}
-                  </button>
-                ))
-              }
-            </Dropdown>
-          )}
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-4 pb-2 md:hidden">
-          {TABS.map((t) => (
-            <a key={t.id} href={`#/guide/${guide.id}${t.id === 'steps' ? '' : '/' + t.id}`} className={`rounded-md px-3 py-1.5 text-sm font-medium ${tab === t.id ? 'bg-raised text-ink' : 'text-muted'}`}>
-              {t.label}
-            </a>
-          ))}
-        </nav>
       </header>
 
       {readOnly && (
@@ -314,20 +341,36 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
       )}
 
       {tab === 'steps' && (
-        <div className="mx-auto flex max-w-6xl gap-8 px-4 pt-6">
-          {/* Outline */}
-          <aside className="sticky top-20 hidden h-[calc(100vh-6rem)] w-60 flex-none overflow-auto lg:block">
-            <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-muted">Outline</p>
-            <ol className="space-y-0.5 text-sm">
-              {guide.steps.map((s) => (
-                <li key={s.id}>
-                  <a href={`#/guide/${guide.id}`} onClick={(e) => { e.preventDefault(); document.getElementById(`step-${s.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }) }} className={`flex gap-2 truncate rounded-md px-2 py-1 hover:bg-raised ${s.kind === 'heading' ? 'mt-2 font-semibold' : 'text-muted'}`}>
-                    {s.kind === 'step' && <span className="w-5 flex-none text-right tabular-nums">{nums.get(s.id)}.</span>}
-                    {s.kind === 'note' && <span className="w-5 flex-none text-right">•</span>}
-                    <span className="truncate">{s.title || 'Untitled'}</span>
-                  </a>
-                </li>
-              ))}
+        <div className="mx-auto flex max-w-6xl gap-10 px-5 pt-8 sm:px-8">
+          {/* Contents: follows the step you're looking at. */}
+          <aside className="sticky top-36 hidden h-[calc(100vh-10rem)] w-56 flex-none overflow-auto xl:block">
+            <p className="mb-3 px-2 text-xs font-medium text-muted">Contents</p>
+            <ol className="relative space-y-0.5 text-[13px]">
+              <span className="absolute bottom-3 left-[19px] top-3 w-px border-l border-dashed border-ink/15" aria-hidden />
+              {guide.steps.map((s) => {
+                const on = s.id === inView
+                return (
+                  <li key={s.id} className="relative">
+                    <a
+                      href={`#/guide/${guide.id}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        document.getElementById(`step-${s.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                      }}
+                      className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors ${on ? 'bg-surface text-ink shadow-[0_1px_2px_rgb(21_20_18/0.06)]' : 'text-muted hover:text-ink'} ${s.kind === 'heading' ? 'mt-3 font-semibold text-ink' : ''}`}
+                    >
+                      {s.kind === 'step' ? (
+                        <span className={`relative grid h-[22px] w-[22px] flex-none place-items-center rounded-full text-[11px] font-semibold tabular-nums ${on ? 'bg-ember text-white' : 'bg-surface text-ink ring-1 ring-line'}`}>{nums.get(s.id)}</span>
+                      ) : (
+                        <span className="relative grid h-[22px] w-[22px] flex-none place-items-center">
+                          <span className={`h-1.5 w-1.5 rounded-full ${s.kind === 'heading' ? 'bg-ink' : 'bg-accent'}`} />
+                        </span>
+                      )}
+                      <span className="truncate">{s.title || 'Untitled'}</span>
+                    </a>
+                  </li>
+                )
+              })}
             </ol>
           </aside>
 
@@ -335,9 +378,20 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
             <div className="mb-4 flex flex-wrap items-start gap-3">
               <div className="min-w-0 flex-1">
                 <AutoText value={guide.description} onChange={(description) => update((g) => ({ ...g, description }))} placeholder="Add a short description of what this guide is for…" ariaLabel="Guide description" className="text-[15px] text-muted" />
-                <p className="mt-1 text-xs text-muted">
-                  {nums.size} step{nums.size === 1 ? '' : 's'} · click a screenshot to annotate it
-                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  {[
+                    [`${nums.size} step${nums.size === 1 ? '' : 's'}`, 'list'],
+                    [`${shotCount} screenshot${shotCount === 1 ? '' : 's'}`, 'image'],
+                    ...(blurCount ? [[`${blurCount} blurred`, 'blur']] : []),
+                    ...(guide.video ? [['Video', 'video']] : []),
+                  ].map(([t, icon]) => (
+                    <span key={t} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-muted">
+                      <Icon name={icon} className="h-3.5 w-3.5" />
+                      {t}
+                    </span>
+                  ))}
+                  {!readOnly && nums.size > 0 && <span className="self-center px-1 text-muted">Click a screenshot to annotate it</span>}
+                </div>
               </div>
               {!readOnly && nums.size > 0 && (
                 <Dropdown label="Screenshots" icon="image">
@@ -453,7 +507,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
           guide={guide}
           rendered={rendered}
           onSave={(markdown, source) => update((g) => ({ ...g, docs: { ...g.docs, [tab]: { kind: tab, markdown, source, updatedAt: Date.now() } } }))}
-          needKey={() => setSettingsOpen(true)}
+          needKey={() => openSettings()}
           renderForAi={() => renderAll(guide, images, 1400, { full: true })}
           toast={setToast}
         />
@@ -474,7 +528,6 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
           }}
         />
       )}
-      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
       <Toast toast={toast} onDone={dismissToast} />
     </div>
   )

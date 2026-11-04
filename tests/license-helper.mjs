@@ -25,10 +25,12 @@ export async function fakeLicenseServer(ctx) {
   return { calls, revoke: () => (revoked = true), restore: () => (revoked = false) }
 }
 
-// Opens Settings from the plan badge, tries a wrong key, then the right one.
+// Opens the plans window from the sidebar's upgrade card, tries a wrong key, then the right one.
 export async function activateInSettings(page, check) {
-  await page.getByRole('button', { name: 'Free · Upgrade' }).click()
-  check((await page.getByRole('button', { name: 'Upgrade to Pro' }).count()) >= 1, 'license screen offers Upgrade to Pro')
+  await page.getByRole('button', { name: 'Upgrade to Pro' }).first().click()
+  await page.getByRole('dialog', { name: 'Change your plan' }).waitFor()
+  check((await page.getByRole('dialog').getByRole('button', { name: 'Upgrade to Pro' }).count()) === 1, 'the plans window offers Upgrade to Pro')
+  check((await page.getByRole('button', { name: 'Get lifetime' }).count()) === 1, 'the plans window offers lifetime access')
   await page.getByLabel('License key').fill('WRONG-KEY')
   await page.getByRole('button', { name: 'Activate' }).click()
   await page.getByRole('alert').filter({ hasText: 'start with STEPCRUMB' }).waitFor()

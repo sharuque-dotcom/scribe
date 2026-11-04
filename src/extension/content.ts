@@ -1,7 +1,7 @@
 // Runs in every page. While recording, it turns clicks, typing, dropdown
 // choices and Enter presses into captured steps, and shows a small control bar.
 import { estimateOrigin, monitorOffset, toVideoPoint, toVideoRect, type ScreenGeom } from '../shared/coords'
-import { cleanLabel, looksSensitive } from '../shared/describe'
+import { cleanLabel, looksSensitive, mainLine } from '../shared/describe'
 import type { CapturedEvent, GuideMeState, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
 import { loadAutoBlur, onAutoBlurChange } from '../shared/autoblur'
 import { locatorOf } from './locator'
@@ -116,9 +116,13 @@ function init() {
       }
       // Hide the bar and reply once a frame without it has been painted.
       // Also report secret fields as they are right now, since the user may
-      // have typed since the click.
-      bar.hold(500)
-      requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), piiRects: piiNow(), page: pageId, seq })))
+      // have typed since the click. A spare screenshot first waits for menus
+      // and panels that are still fading or sliding in, so it never catches two
+      // states on top of each other.
+      bar.hold(msg.optional ? 950 : 500)
+      const answer = () => requestAnimationFrame(() => requestAnimationFrame(() => reply({ redactRects: sensitiveRects(), piiRects: piiNow(), page: pageId, seq, scroll: { x: Math.round(scrollX), y: Math.round(scrollY) } })))
+      if (msg.optional) void settled(450).then(answer)
+      else answer()
       return true
     }
   })
@@ -336,6 +340,7 @@ function init() {
       page: pageId,
       // The page's state just before this action took effect.
       seq,
+      scroll: { x: Math.round(scrollX), y: Math.round(scrollY) },
       pageTitle: document.title,
       t: Date.now(),
       ...extra,
@@ -441,7 +446,7 @@ function describeTarget(el: Element): TargetInfo {
     if (role === 'checkbox' || role === 'switch') checked = el.getAttribute('aria-checked') === 'true'
   }
   // Use the first line of long labels (e.g. a card with a heading and body).
-  label = cleanLabel(label.split('\n').find((l) => l.trim()) ?? '')
+  label = cleanLabel(mainLine(label))
   return { tag, role, inputType, label, checked }
 }
 
@@ -519,6 +524,27 @@ function piiRects(settings: AutoBlurSettings, custom: RegExp[], ours: (n: Node) 
 }
 
 // ---------- recording control bar ----------
+
+// Waits (up to `max` ms) until no finite CSS animation or transition is running
+// on the page, so a screenshot doesn't catch something halfway in. Endless
+// animations (spinners, pulsing dots) are ignored.
+async function settled(max: number): Promise<void> {
+  const until = performance.now() + max
+  for (;;) {
+    let moving = false
+    try {
+      moving = document.getAnimations().some((a) => {
+        if (a.playState !== 'running') return false
+        const end = a.effect?.getComputedTiming().endTime
+        return typeof end === 'number' && Number.isFinite(end)
+      })
+    } catch {
+      return
+    }
+    if (!moving || performance.now() >= until) return
+    await new Promise((r) => setTimeout(r, 40))
+  }
+}
 
 function createBar(beforeAction: () => void = () => {}) {
   const host = document.createElement('div')

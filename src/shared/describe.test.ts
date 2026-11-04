@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cleanLabel, describeClick, describeEvent, displayUrl, looksSensitive, shouldMerge } from './describe'
+import { cleanLabel, describeClick, mainLine, describeEvent, displayUrl, looksSensitive, shouldMerge } from './describe'
 import type { CapturedEvent, Step } from './types'
 
 const ev = (over: Partial<CapturedEvent>): CapturedEvent => ({
@@ -80,5 +80,17 @@ describe('shouldMerge', () => {
     expect(shouldMerge(click, ev({ action: 'click', elementKey: 'INPUT|email|' }), 2000)).toBe(false)
     expect(shouldMerge(click, ev({ action: 'type', elementKey: 'INPUT|email|' }), 1000 + 10 * 60_000)).toBe(false)
     expect(shouldMerge(undefined, ev({ action: 'type', elementKey: 'x' }), 0)).toBe(false)
+  })
+})
+
+describe('mainLine', () => {
+  it('skips an avatar letter before the name', () => {
+    expect(mainLine("E\nErth's Lovable\nPro")).toBe("Erth's Lovable")
+  })
+  it('keeps a normal first line', () => {
+    expect(mainLine('Save contact\nCtrl+S')).toBe('Save contact')
+  })
+  it('falls back to the only line, even if short', () => {
+    expect(mainLine('OK')).toBe('OK')
   })
 })

@@ -167,7 +167,7 @@ try {
   await editor.screenshot({ path: join(out, 'v3-video-tab-top.png') })
 
   // Play advances the preview.
-  const timeText = () => editor.locator('span.tabular-nums').first().textContent()
+  const timeText = () => editor.locator('span.tabular-nums', { hasText: ' / ' }).first().textContent()
   await editor.getByTitle('Jump here').nth(0).click()
   const before = await timeText()
   await editor.getByRole('button', { name: 'Play' }).click()

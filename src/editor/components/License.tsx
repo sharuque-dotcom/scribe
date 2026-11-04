@@ -9,7 +9,7 @@ const maskKey = (key: string) => (key.length > 12 ? `${key.slice(0, 10)}…${key
 const proFeatures = Object.values(FEATURES).filter((f) => f.tier === 'pro')
 
 // Plan status, the license key form, and links to upgrade or manage the subscription.
-export function LicenseSection() {
+export function LicenseSection({ keyOnly = false }: { keyOnly?: boolean } = {}) {
   const { license, pro, lapsed } = usePlan()
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
@@ -57,18 +57,22 @@ export function LicenseSection() {
           <p className="text-xs">Pro is no longer active on this computer: the subscription ended, or this computer was removed from your license. StepCrumb is back on the free plan, and your guides and videos are safe here.</p>
           <p className="mt-1 text-xs">{manage}</p>
         </div>
-      ) : (
+      ) : keyOnly ? null : (
         <p className="font-semibold">Free plan</p>
       )}
-      <p className="mb-1 text-xs text-muted">StepCrumb Pro adds:</p>
-      <ul className="mb-3 list-disc space-y-0.5 pl-5 text-xs text-muted">
-        {proFeatures.map((f) => (
-          <li key={f.label}>{f.label}</li>
-        ))}
-      </ul>
-      <button className="btn-primary mb-3 w-full justify-center" onClick={openCheckout}>
-        <Icon name="sparkle" /> Upgrade to Pro
-      </button>
+      {!keyOnly && (
+        <>
+          <p className="mb-1 text-xs text-muted">StepCrumb Pro adds:</p>
+          <ul className="mb-3 list-disc space-y-0.5 pl-5 text-xs text-muted">
+            {proFeatures.map((f) => (
+              <li key={f.label}>{f.label}</li>
+            ))}
+          </ul>
+          <button className="btn-primary mb-3 w-full justify-center" onClick={openCheckout}>
+            <Icon name="sparkle" /> Upgrade to Pro
+          </button>
+        </>
+      )}
       <label className="mb-1 block text-xs font-medium" htmlFor="license-key">
         Already bought? Enter your license key
       </label>
@@ -83,7 +87,7 @@ export function LicenseSection() {
           {error}
         </p>
       )}
-      <p className="mt-2 text-xs text-muted">The key is in your purchase email from Polar. Checking it is the only thing StepCrumb sends online; your guides never leave this computer.</p>
+      <p className="mt-2 text-xs text-muted">The key is in your purchase email from Polar. Only the key is checked online; your guides never leave this computer.</p>
     </section>
   )
 }

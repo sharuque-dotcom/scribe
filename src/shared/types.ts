@@ -242,6 +242,8 @@ export interface CapturedEvent {
   page?: string
   // The page's change counter when the event happened (see content.ts).
   seq?: number
+  // Where the page was scrolled to, so an older screenshot is only used if it shows the same part of the page.
+  scroll?: { x: number; y: number }
   pageTitle: string
   // When it happened (Date.now()), used to place the step in the video.
   t?: number

@@ -189,7 +189,7 @@ try {
   await editor.waitForSelector('textarea[aria-label^="Step"]')
 
   // ---------- Free plan ----------
-  check((await editor.getByRole('button', { name: 'Free · Upgrade' }).count()) === 1, 'free plan badge shown')
+  check((await editor.getByRole('button', { name: 'Upgrade to Pro' }).count()) === 1, 'free plan: the sidebar shows the Upgrade to Pro card')
   await editor.getByRole('button', { name: 'Export' }).click()
   check((await editor.getByRole('button', { name: 'PDF (with StepCrumb footer)' }).count()) === 1, 'free PDF export is labelled as branded')
   await editor.getByRole('button', { name: /HTML page/ }).click()
@@ -244,10 +244,10 @@ try {
   const after = await sw.evaluate(() => globalThis.scribe.recheckLicense(true))
   check(after?.status === 'revoked', 'a re-check after cancellation marks the key revoked')
   await editor.reload()
-  await editor.getByRole('button', { name: 'Free · Upgrade' }).waitFor()
+  await editor.getByRole('button', { name: 'Upgrade to Pro' }).first().waitFor()
   check(true, 'the app drops back to Free')
   check((await editor.getByText('Create a project in Projectly').count()) >= 1, 'local guides are still there')
-  await editor.getByRole('button', { name: 'Free · Upgrade' }).click()
+  await editor.getByRole('button', { name: 'Upgrade to Pro' }).first().click()
   await editor.getByText('Your Pro access has ended').waitFor()
   check(true, 'explains that Pro ended and guides are safe')
   await editor.keyboard.press('Escape')

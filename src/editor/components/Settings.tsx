@@ -10,14 +10,41 @@ import { countsOn, setCountsOn } from '../../shared/telemetry'
 import { PII_LABEL, type AutoBlurSettings } from '../../shared/pii'
 import { usePlan } from '../usePlan'
 import { FEATURES } from '../../shared/plans'
-import { openCheckout } from '../upgrade'
+import { openPlans } from '../actions'
+
+// Your plan: Pro shows the license; Free offers the plans window and the key form.
+function PlanSection({ onPlans }: { onPlans: () => void }) {
+  const { pro, ready } = usePlan()
+  if (!ready) return null
+  if (pro) return <LicenseSection />
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3 rounded-2xl border border-line bg-canvas p-3.5">
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">Free plan</span>
+          <span className="block text-xs text-muted">Pro adds Word, HTML and Markdown, 1080p videos of any length, no StepCrumb mark, and more.</span>
+        </span>
+        <button
+          className="btn-primary rounded-xl"
+          onClick={() => {
+            onPlans()
+            openPlans()
+          }}
+        >
+          See plans
+        </button>
+      </div>
+      <LicenseSection keyOnly />
+    </div>
+  )
+}
 
 export function SettingsDialog({ onClose }: { onClose: (saved?: AiSettings) => void }) {
   const [s, setS] = useState<AiSettings>(loadSettings)
   return (
     <Modal title="Settings" onClose={() => onClose()}>
       <div className="space-y-4 text-sm">
-        <LicenseSection />
+        <PlanSection onPlans={() => onClose()} />
         <HighlightSection />
         <AutoBlurSection />
         <CountsSection />
@@ -109,7 +136,7 @@ function HighlightSection() {
           onClick={(e) => {
             if (!can('customHighlight')) {
               e.preventDefault()
-              openCheckout()
+              openPlans()
             }
           }}
         >
@@ -183,7 +210,7 @@ function AutoBlurSection() {
               {pro ? 'Words match in any case. Put a pattern between slashes, like /MRN-\\d{6}/ for medical record numbers.' : (
                 <>
                   Blur names, record numbers or anything specific to your work.{' '}
-                  <button className="font-medium text-accent hover:underline" onClick={openCheckout}>
+                  <button className="font-medium text-accent hover:underline" onClick={openPlans}>
                     Upgrade to Pro
                   </button>
                 </>

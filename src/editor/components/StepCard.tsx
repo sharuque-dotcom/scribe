@@ -29,7 +29,7 @@ export function StepCard({ step, number, image, view, first, last, readOnly, onC
   const [showDetail, setShowDetail] = useState(!!step.detail)
 
   const tools = !readOnly && (
-    <div className="flex items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100">
+    <div className="flex items-center gap-0.5 rounded-lg border border-transparent bg-surface/90 p-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover/card:border-line group-hover/card:opacity-100">
       {step.kind === 'step' && image && (
         <button className="icon-btn" onClick={onAnnotate} title="Annotate screenshot" aria-label="Annotate screenshot">
           <Icon name="pen" />
@@ -49,8 +49,8 @@ export function StepCard({ step, number, image, view, first, last, readOnly, onC
 
   if (step.kind === 'heading') {
     return (
-      <div className="group/card flex items-center gap-3 pt-4" id={`step-${step.id}`}>
-        <AutoText value={step.title} onChange={(title) => onChange({ title })} placeholder="Section heading" ariaLabel="Section heading" className="text-xl font-semibold" />
+      <div className="group/card flex items-center gap-3 pt-6" id={`step-${step.id}`}>
+        <AutoText value={step.title} onChange={(title) => onChange({ title })} placeholder="Section heading" ariaLabel="Section heading" className="text-[22px] font-semibold tracking-[-0.01em]" />
         {tools}
       </div>
     )
@@ -82,9 +82,9 @@ export function StepCard({ step, number, image, view, first, last, readOnly, onC
   }
 
   return (
-    <div className="group/card card p-5" id={`step-${step.id}`}>
-      <div className="flex items-start gap-3">
-        <span className="mt-0.5 grid h-7 w-7 flex-none place-items-center rounded-full bg-orange-500 text-sm font-bold text-white">{number}</span>
+    <div className="group/card rounded-[20px] border border-line bg-surface p-5 shadow-[0_1px_2px_rgb(21_20_18/0.04)] transition-shadow hover:shadow-soft sm:p-6" id={`step-${step.id}`}>
+      <div className="flex items-start gap-3.5">
+        <span className="mt-px grid h-8 w-8 flex-none place-items-center rounded-full bg-ember text-sm font-bold text-white shadow-[0_2px_6px_-1px_rgb(249_115_22/0.5)] ring-4 ring-ember/10">{number}</span>
         <div className="min-w-0 flex-1">
           <AutoText value={step.title} onChange={(title) => onChange({ title })} placeholder="Describe this step" ariaLabel={`Step ${number} text`} className="text-[16px] font-semibold leading-snug" />
           {showDetail ? (
@@ -99,10 +99,10 @@ export function StepCard({ step, number, image, view, first, last, readOnly, onC
         </div>
         {tools}
       </div>
-      {image && <StepImage step={step} image={image} view={view} className="mt-4" maxWidth={1200} onClick={readOnly ? undefined : onAnnotate} />}
+      {image && <StepImage step={step} image={image} view={view} className="mt-5 overflow-hidden rounded-xl ring-1 ring-line shadow-[0_12px_32px_-18px_rgb(21_20_18/0.35)]" maxWidth={1200} onClick={readOnly ? undefined : onAnnotate} />}
       {image && view && !readOnly && <ZoomControls step={step} image={image} view={view} onChange={onChange} onAdjust={onAdjustZoom} />}
       {step.url && (
-        <p className="mt-2 truncate text-xs text-muted" title={step.url}>
+        <p className="mt-2.5 truncate text-xs text-muted/80" title={step.url}>
           {step.pageTitle ? `${step.pageTitle} · ` : ''}
           {step.url}
         </p>
@@ -140,7 +140,7 @@ function ZoomControls({ step, image, view, onChange, onAdjust }: { step: Step; i
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs">
-      <div className="inline-flex rounded-md border border-line bg-raised p-0.5" role="group" aria-label="Screenshot zoom">
+      <div className="inline-flex rounded-lg border border-line bg-canvas p-0.5" role="group" aria-label="Screenshot zoom">
         {(
           [
             ['auto', 'Auto'],

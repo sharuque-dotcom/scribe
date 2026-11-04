@@ -49,16 +49,18 @@ interface Shot {
   // Which page (document) was showing, and its change counter, as reported by that page.
   page?: string
   seq?: number
+  scroll?: { x: number; y: number }
 }
 
 // Ask the page to hide the capture bar and say which page it is. A page that
 // is navigating away won't answer, so don't wait long.
-type Prepared = { redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number; skip?: boolean }
+type Prepared = { redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number; scroll?: { x: number; y: number }; skip?: boolean }
 async function prepare(tabId: number | undefined, optional = false): Promise<Prepared | undefined> {
   if (tabId === undefined) return undefined
   const reply = await Promise.race([
     chrome.tabs.sendMessage(tabId, { type: 'prepareCapture', optional }).catch(() => undefined),
-    sleep(150).then(() => undefined),
+    // A spare screenshot may wait for the page's animations to finish.
+    sleep(optional ? 650 : 150).then(() => undefined),
   ])
   return reply as Prepared | undefined
 }
@@ -94,7 +96,7 @@ async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRec
         dataUrl = await blobToDataUrl(await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.88 }))
       }
       bmp.close()
-      return { dataUrl, ...size, redact, pii: reply?.piiRects, page: reply?.page, seq: reply?.seq }
+      return { dataUrl, ...size, redact, pii: reply?.piiRects, page: reply?.page, seq: reply?.seq, scroll: reply?.scroll }
     } catch (err) {
       if (attempt >= 3 || (err instanceof Error && err.message === 'screenshot timed out')) throw err
     }
@@ -141,6 +143,9 @@ function capture(windowId: number, tabId?: number, fallbackRedact: NRect[] = [],
   )
 }
 
+const sameScroll = (shot: Shot, event: CapturedEvent) =>
+  !event.scroll || !shot.scroll || (Math.abs(shot.scroll.x - event.scroll.x) < 4 && Math.abs(shot.scroll.y - event.scroll.y) < 4)
+
 // The screenshot for a step: the page exactly as it was at the action.
 async function shotForEvent(windowId: number, tabId: number | undefined, event: CapturedEvent): Promise<Shot> {
   const { page, seq } = event
@@ -156,8 +161,15 @@ async function shotForEvent(windowId: number, tabId: number | undefined, event: 
   const shot = await capture(windowId, tabId, event.redactRects)
   if (shot.page === page && shot.seq === seq) return shot
   // 3. The page already changed (the click took effect, or another page opened):
-  // use the newest screenshot from before the action, so a step never shows its own result.
-  if (shot.page !== page || (shot.seq !== undefined && shot.seq > seq)) return storedShot(page, seq, false) ?? shot
+  // use the newest screenshot from before the action, so a step never shows its own
+  // result, but only if it shows the same part of the page. If the page was
+  // scrolled since (a quick scroll, then a click), an older screenshot would put
+  // the highlight on the wrong thing; the fresh one is scrolled right.
+  if (shot.page !== page || (shot.seq !== undefined && shot.seq > seq)) {
+    const before = storedShot(page, seq, false)
+    if (before && sameScroll(before, event)) return before
+    return shot.page === page ? shot : (before ?? shot)
+  }
   return shot
 }
 

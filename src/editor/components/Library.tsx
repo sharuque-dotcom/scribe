@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { deleteGuide, getImage, getVideo, listGuides, putGuide } from '../../shared/db'
+import { deleteGuide, getImage, getVideo, listGuides } from '../../shared/db'
 import { importGuideJson } from '../../shared/export'
 import { renderStep } from '../../shared/render'
-import type { CaptureMode, Guide, RecorderState } from '../../shared/types'
-import { uid } from '../../shared/types'
+import type { CaptureMode, Guide } from '../../shared/types'
 import { createSampleGuide } from '../sample'
 import { canGuideMe, startGuideMe } from '../guideMe'
-import { PlanBadge } from './PlanBadge'
-import { SettingsDialog } from './Settings'
+import { newBlankGuide, startCapture } from '../actions'
 import { Icon, isExtension, timeAgo, Toast, type ToastData } from '../ui'
 
 // What a guide is, for its colour, icon and the filter chips.
@@ -91,7 +89,6 @@ export function Library() {
   const [guides, setGuides] = useState<Guide[] | null>(null)
   const [thumbs, setThumbs] = useState<Record<string, string | null>>({})
   const [toast, setToast] = useState<ToastData | null>(null)
-  const [settings, setSettings] = useState(false)
   const [filter, setFilter] = useState<'all' | 'guides' | 'videos'>('all')
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
@@ -125,6 +122,15 @@ export function Library() {
   useEffect(() => {
     if (searching) searchInput.current?.focus()
   }, [searching])
+  // The sidebar's Search jumps here.
+  useEffect(() => {
+    const on = () => {
+      setSearching(true)
+      searchInput.current?.focus()
+    }
+    window.addEventListener('stepcrumb:search', on)
+    return () => window.removeEventListener('stepcrumb:search', on)
+  }, [])
 
   const shown = useMemo(() => {
     if (!guides) return []
@@ -140,25 +146,13 @@ export function Library() {
     return [...list].sort((a, b) => b.updatedAt - a.updatedAt)
   }, [guides, filter, query, sort])
 
-  const newGuide = async () => {
-    const now = Date.now()
-    const g: Guide = { id: uid(), title: 'Untitled guide', description: '', createdAt: now, updatedAt: now, status: 'ready', steps: [], docs: {} }
-    await putGuide(g)
-    location.hash = `#/guide/${g.id}`
-  }
+  const newGuide = newBlankGuide
 
-  // Starts capturing on the website they were last on (the background brings it
-  // to the front). For video, Chrome's share dialog asks what to record.
   const capture = async (mode: CaptureMode) => {
-    if (!isExtension) {
-      setToast({ text: 'Capturing needs the StepCrumb browser extension.', tone: 'error' })
-      return
-    }
     setStarting(mode)
     try {
-      await chrome.storage.local.set({ recordMode: mode })
-      const st = (await chrome.runtime.sendMessage({ type: 'start', mode, fromLibrary: true })) as RecorderState
-      if (!st?.recording && st?.notice) setToast({ text: st.notice, tone: 'error' })
+      const err = await startCapture(mode)
+      if (err) setToast({ text: err, tone: 'error' })
     } finally {
       setStarting(null)
     }
@@ -192,16 +186,12 @@ export function Library() {
   const toneFor = (id: CaptureMode | 'blank') => TONE[id === 'screenshots' ? 'guide' : id]
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-24 pt-10 sm:px-6">
-      <header className="mb-8 flex flex-wrap items-center gap-3">
-        <img src="./icons/icon48.png" alt="" className="h-9 w-9" />
-        <h1 className="mr-auto font-serif text-[2.1rem] font-semibold leading-none tracking-tight" style={{ fontFamily: '"Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif' }}>
-          Library
-        </h1>
-        <PlanBadge onOpen={() => setSettings(true)} />
-        <button className="icon-btn" onClick={() => setSettings(true)} title="Settings" aria-label="Settings">
-          <Icon name="settings" />
-        </button>
+    <div className="mx-auto max-w-6xl px-5 pb-24 pt-10 sm:px-8">
+      <header className="mb-8 flex flex-wrap items-end gap-3">
+        <div className="mr-auto">
+          <h1 className="text-[34px] font-semibold leading-none tracking-[-0.02em]">Library</h1>
+          <p className="mt-2 text-[15px] text-muted">{guides === null ? '\u00a0' : guides.length ? `${guides.length} ${guides.length === 1 ? 'guide' : 'guides and videos'}, all on this computer.` : 'Your guides and videos live here, on this computer.'}</p>
+        </div>
       </header>
 
       <div className="mb-8 flex flex-wrap items-center gap-2">
@@ -421,7 +411,6 @@ export function Library() {
         </div>
       )}
       <input ref={fileInput} type="file" accept=".json,application/json" className="hidden" onChange={(e) => { void onImport(e.target.files?.[0]); e.target.value = '' }} />
-      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
       <Toast toast={toast} onDone={() => setToast(null)} />
     </div>
   )

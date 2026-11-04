@@ -10,6 +10,17 @@ export function cleanLabel(raw: string | null | undefined): string {
   return text.length > MAX_LABEL ? text.slice(0, MAX_LABEL - 1).trimEnd() + '…' : text
 }
 
+// The line of an element's text that names it. Menu items and cards often start
+// with an avatar letter or a badge ("E", "Pro"), so lines of one or two
+// characters are skipped when a real name follows.
+export function mainLine(text: string): string {
+  const lines = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  return lines.find((l) => l.length > 2 && /\p{L}/u.test(l)) ?? lines[0] ?? ''
+}
+
 const q = (s: string) => `"${s}"`
 
 function fieldNoun(t: TargetInfo): string {

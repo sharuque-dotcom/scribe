@@ -18,6 +18,9 @@ export const LICENSE_CONFIG = {
   api: 'https://api.polar.sh/v1/customer-portal/license-keys',
 }
 
+// Prices shown in the app (the checkout itself lives in Polar).
+export const PRICES = { monthly: 8, yearly: 69, lifetime: 49, lifetimeLimit: 1000 }
+
 export const portalUrl = () => `https://polar.sh/${LICENSE_CONFIG.orgSlug}/portal`
 
 const HOUR = 60 * 60 * 1000

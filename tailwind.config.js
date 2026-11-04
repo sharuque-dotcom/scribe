@@ -12,12 +12,15 @@ export default {
         line: 'rgb(var(--line) / <alpha-value>)',
         accent: 'rgb(var(--accent) / <alpha-value>)',
         rec: 'rgb(var(--rec) / <alpha-value>)',
+        ember: 'rgb(var(--ember) / <alpha-value>)',
+        side: 'rgb(var(--side) / <alpha-value>)',
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
       },
       boxShadow: {
-        soft: '0 1px 2px rgb(0 0 0 / 0.05), 0 8px 24px -12px rgb(0 0 0 / 0.15)',
+        soft: '0 1px 2px rgb(21 20 18 / 0.05), 0 8px 24px -12px rgb(21 20 18 / 0.16)',
+        float: '0 1px 2px rgb(21 20 18 / 0.04), 0 24px 48px -20px rgb(21 20 18 / 0.22)',
       },
     },
   },
