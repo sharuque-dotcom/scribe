@@ -510,6 +510,10 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
           needKey={() => openSettings()}
           renderForAi={() => renderAll(guide, images, 1400, { full: true })}
           toast={setToast}
+          onAnnotate={(id) => {
+            setAnnotTool('box')
+            setAnnotating(id)
+          }}
         />
       )}
 

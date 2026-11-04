@@ -1,15 +1,18 @@
 import { count } from '../../shared/telemetry'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { loadSettings, writeDocument } from '../../shared/ai'
 import { AI_ENABLED } from '../../shared/features'
 import { download, markdownToHtml, markdownWithImages, printHtml, shotsByNumber, slug, wrapHtml, type Rendered } from '../../shared/export'
-import { buildSop, buildTraining } from '../../shared/templates'
+import { buildSop, buildTraining, stepNumbers } from '../../shared/templates'
 import type { DocKind, Guide } from '../../shared/types'
 import { Dropdown, Icon, type ToastData } from '../ui'
 import { exportFeature, FEATURES } from '../../shared/plans'
 import { usePlan } from '../usePlan'
 import { lockedToast } from '../upgrade'
 import { markdownDocx, toBlob } from '../../shared/docx'
+
+// The document editor is large, so it loads only when an SOP or training module is opened.
+const DocEditor = lazy(() => import('./DocEditor').then((m) => ({ default: m.DocEditor })))
 
 const LABELS: Record<DocKind, { name: string; blurb: string }> = {
   sop: {
@@ -31,6 +34,8 @@ interface Props {
   // Full-screen screenshots for Claude, so it sees the whole page.
   renderForAi: () => Promise<Rendered>
   toast: (t: ToastData) => void
+  // Opens the annotation editor for a step's screenshot.
+  onAnnotate?: (stepId: string) => void
 }
 
 // Shows the document in an isolated frame, styled exactly like the export.
@@ -54,7 +59,7 @@ function DocFrame({ html }: { html: string }) {
   return <iframe ref={ref} title="Document preview" srcDoc={html} className="w-full rounded-xl border border-line bg-white shadow-soft" style={{ height }} />
 }
 
-export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, toast }: Props) {
+export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, toast, onAnnotate }: Props) {
   const doc = guide.docs[kind]
   const [editing, setEditing] = useState(false)
   const [streaming, setStreaming] = useState<string | null>(null)
@@ -73,13 +78,26 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
 
   const markdown = streaming ?? doc?.markdown ?? ''
   const shots = useMemo(() => (rendered ? shotsByNumber(guide, rendered) : {}), [guide, rendered])
+  // Step number → title and step id, for the screenshot picker and Annotate.
+  const byNumber = useMemo(() => {
+    const titles: Record<number, string> = {}
+    const ids: Record<number, string> = {}
+    for (const [id, n] of stepNumbers(guide)) {
+      const s = guide.steps.find((x) => x.id === id)
+      if (s) {
+        titles[n] = s.title
+        ids[n] = id
+      }
+    }
+    return { titles, ids }
+  }, [guide])
   const previewMd = streaming !== null ? (throttled ?? '') : markdown
   const { can } = usePlan()
   const branded = !can('pdfNoBranding')
   const html = useMemo(() => wrapHtml(guide.title, markdownToHtml(previewMd, shots), { branded }), [previewMd, shots, guide.title, branded])
 
   const fromTemplate = () => {
-    if (doc && !confirm('Replace the current document with a fresh template?')) return
+    if (doc && !confirm('Replace this document with a fresh one built from the steps? Your edits are replaced, and Undo brings them back.')) return
     onSave(kind === 'sop' ? buildSop(guide) : buildTraining(guide), 'template')
   }
 
@@ -124,7 +142,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
   const busy = streaming !== null
 
   return (
-    <div className="mx-auto max-w-4xl px-4 pb-24 pt-6">
+    <div className="mx-auto max-w-4xl px-5 pb-24 pt-6 sm:px-8">
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <div className="mr-auto">
           <h2 className="text-lg font-semibold">{LABELS[kind].name}</h2>
@@ -141,7 +159,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
           </button>
         ) : (
           <>
-            <button className={AI_ENABLED ? 'btn-secondary' : 'btn-primary'} onClick={fromTemplate} disabled={!guide.steps.length}>
+            <button className={AI_ENABLED || doc ? 'btn-secondary' : 'btn-primary'} onClick={fromTemplate} disabled={!guide.steps.length}>
               <Icon name="doc" /> {doc ? (AI_ENABLED ? 'Rebuild from template' : 'Rebuild from steps') : AI_ENABLED ? 'Use template' : 'Create from steps'}
             </button>
             {AI_ENABLED && (
@@ -151,9 +169,19 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
             )}
             {doc && (
               <>
-                <button className="btn-secondary" onClick={() => setEditing((e) => !e)}>
-                  <Icon name={editing ? 'eye' : 'pen'} /> {editing ? 'Preview' : 'Edit'}
-                </button>
+                <Dropdown label="More" icon="more" align="right">
+                  {(close) => (
+                    <button
+                      className="menu-item"
+                      onClick={() => {
+                        close()
+                        setEditing((e) => !e)
+                      }}
+                    >
+                      <Icon name={editing ? 'pen' : 'text'} /> {editing ? 'Back to normal editing' : 'Edit as Markdown'}
+                    </button>
+                  )}
+                </Dropdown>
                 <Dropdown label="Export" icon="download">
                   {(close) => (
                     <>
@@ -200,7 +228,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
             </p>
           )}
         </div>
-      ) : editing ? (
+      ) : editing && !busy ? (
         <div>
           <p className="mb-2 text-xs text-muted">
             Markdown. Put <code className="rounded bg-raised px-1">{'{{screenshot:3}}'}</code> on its own line to show step 3's screenshot.
@@ -212,8 +240,19 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
             aria-label="Document markdown"
           />
         </div>
-      ) : (
+      ) : busy ? (
         <DocFrame html={html} />
+      ) : (
+        <Suspense fallback={<div className="h-[60vh] animate-pulse rounded-[20px] bg-surface" />}>
+        <DocEditor
+          key={kind}
+          markdown={markdown}
+          shots={shots}
+          titles={byNumber.titles}
+          onChange={(md) => onSave(md, doc?.source ?? 'template')}
+          onAnnotate={onAnnotate ? (n) => byNumber.ids[n] && onAnnotate(byNumber.ids[n]) : undefined}
+        />
+        </Suspense>
       )}
     </div>
   )
