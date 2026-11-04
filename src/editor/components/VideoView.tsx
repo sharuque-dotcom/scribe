@@ -1,3 +1,4 @@
+import { count } from '../../shared/telemetry'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { getVideo, type VoiceClip } from '../../shared/db'
 import { download, slug } from '../../shared/export'
@@ -330,6 +331,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
     try {
       const res = await exportVideo({ recording, video: { ...video, settings }, steps, plan, clips: settings.voice ? clips : {}, onProgress: setExporting, signal: ctrl.signal, limits })
       download(`${slug(guide.title)}.${res.ext}`, res.blob)
+      count('export_video')
       toast({
         text: res.ext === 'mp4' ? 'Video exported as MP4.' : 'Saved as WebM: this browser can’t make MP4. Chrome on Windows or Mac makes MP4.',
       })
@@ -343,6 +345,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
 
   const subtitles = (kind: 'srt' | 'vtt') => {
     const cues = plan.cues.map(({ start, end, text }) => ({ start, end, text }))
+    count('export_captions')
     download(`${slug(guide.title)}.${kind}`, kind === 'srt' ? toSrt(cues) : toVtt(cues), kind === 'srt' ? 'application/x-subrip' : 'text/vtt')
   }
 

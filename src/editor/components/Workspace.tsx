@@ -1,3 +1,4 @@
+import { count } from '../../shared/telemetry'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { loadSettings, polishSteps } from '../../shared/ai'
 import { AI_ENABLED } from '../../shared/features'
@@ -190,9 +191,11 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
 
   const exportGuide = async (format: 'pdf' | 'docx' | 'html' | 'md' | 'json') => {
     const name = slug(guide.title)
+    if (format === 'json') count('export_json')
     if (format === 'json') return download(`${name}.stepcrumb.json`, await guideJson(guide), 'application/json')
     const needs = exportFeature(format)
     if (needs && !can(needs)) return setToast(lockedToast(FEATURES[needs].label))
+    count(`export_${format}`)
     const r = await renderAll(guide, images)
     if (format === 'docx') return download(`${name}.docx`, await toBlob(await guideDocx(guide, r)))
     if (format === 'md') return download(`${name}.md`, guideMarkdown(guide, r), 'text/markdown')

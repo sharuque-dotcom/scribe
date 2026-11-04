@@ -13,7 +13,7 @@
   "background": { "service_worker": "background.js", "type": "module" },
   "permissions": ["tabs", "storage", "scripting", "unlimitedStorage", "tabCapture", "offscreen", "alarms"],
   "content_security_policy": { "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'" },
-  "host_permissions": ["<all_urls>", "https://api.polar.sh/*"],
+  "host_permissions": ["<all_urls>", "https://api.polar.sh/*", "https://www.stepcrumb.com/*"],
   "content_scripts": [
     { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }
   ],

@@ -6,6 +6,7 @@ import { Modal } from '../ui'
 import { HIGHLIGHT_PRESETS } from '../../shared/render'
 import { loadHighlight, saveHighlight } from '../../shared/prefs'
 import { loadAutoBlurSaved, saveAutoBlur } from '../../shared/autoblur'
+import { countsOn, setCountsOn } from '../../shared/telemetry'
 import { PII_LABEL, type AutoBlurSettings } from '../../shared/pii'
 import { usePlan } from '../usePlan'
 import { FEATURES } from '../../shared/plans'
@@ -19,6 +20,7 @@ export function SettingsDialog({ onClose }: { onClose: (saved?: AiSettings) => v
         <LicenseSection />
         <HighlightSection />
         <AutoBlurSection />
+        <CountsSection />
         {AI_ENABLED && (
           <>
             <h3 className="border-t border-line pt-4 font-semibold">AI writing (optional)</h3>
@@ -190,6 +192,36 @@ function AutoBlurSection() {
           </label>
         </div>
       )}
+    </div>
+  )
+}
+
+// Anonymous counts: on by default, one switch to turn them off.
+function CountsSection() {
+  const [on, setOn] = useState<boolean | null>(null)
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || !chrome.storage?.local) return
+    void countsOn().then(setOn)
+  }, [])
+  if (on === null) return null
+  return (
+    <div className="border-t border-line pt-4">
+      <label className="flex items-center justify-between gap-3">
+        <span>
+          <span className="block font-semibold">Send anonymous counts</span>
+          <span className="block text-xs text-muted">Helps us see how StepCrumb is used, for example "1 guide made" or "1 PDF exported". Never what you capture, no page addresses, nothing that identifies you.</span>
+        </span>
+        <input
+          type="checkbox"
+          className="accent-indigo-600"
+          checked={on}
+          onChange={(e) => {
+            setOn(e.target.checked)
+            void setCountsOn(e.target.checked)
+          }}
+          aria-label="Send anonymous counts"
+        />
+      </label>
     </div>
   )
 }

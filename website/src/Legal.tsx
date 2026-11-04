@@ -15,12 +15,13 @@ function Privacy() {
       <h2>When StepCrumb goes online</h2>
       <ul>
         <li><b>License check.</b> If you enter a license key, StepCrumb sends the key, our store ID and an activation ID to our payment provider, Polar, to confirm it, then once a day. Nothing you capture is sent.</li>
+        <li><b>Anonymous counts.</b> When a guide is made or exported, StepCrumb sends a single event name, such as "guide_created" or "export_pdf", to stepcrumb.com so we can count how StepCrumb is used. It never sends what you capture, page addresses, or anything that identifies you or your device. Your IP address is used only to cap counts per network per day, as a one-way hash that expires within a day; it is not stored. Switch this off any time in StepCrumb's Settings.</li>
         <li><b>Voice model.</b> The first time you generate a voiceover, StepCrumb downloads the free voice model from Hugging Face. After that it works offline. No text is sent for this.</li>
       </ul>
       <h2>Payments</h2>
       <p>Purchases are handled by Polar (polar.sh), our merchant of record, which processes your payment details and email address under its own privacy policy. We receive your email and order details so we can send your license and support you.</p>
       <h2>This website</h2>
-      <p>This website does not use advertising trackers. If we add analytics, we will list them here.</p>
+      <p>This website does not use advertising trackers or cookies. It uses Vercel Web Analytics to count page visits, and counts clicks on "Add to Chrome" in the same anonymous way as above: it records the page, the referring site, and the country, browser and device type, without cookies and without identifying you. Visits are counted with a short-lived hash that resets every day.</p>
       <h2>Your rights and contact</h2>
       <p>To ask about your data or delete your purchase record, email <a href={`mailto:${CONFIG.contactEmail}`}>{CONFIG.contactEmail}</a>.</p>
     </>

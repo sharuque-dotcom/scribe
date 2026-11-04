@@ -135,13 +135,18 @@ Host permission `https://api.polar.sh/*`
 To check a Pro license key with our payment provider, Polar. Only the key, our store ID and an activation ID are sent.
 ```
 
+Host permission `https://www.stepcrumb.com/*`
+```
+To send anonymous usage counts to our own website: a single event name such as "guide_created" or "export_pdf", with no content, page addresses or identifiers. Users can switch this off in Settings.
+```
+
 **Remote code**
 ```
 No, I am not using remote code.
 ```
 (The voice model downloaded on first use is data, model weights, not code. Its runtime is bundled in the extension.)
 
-**Data usage:** tick **none** of the data types. StepCrumb does not collect or transmit user data: guides, screenshots and recordings stay in the browser, and the license check sends only the license key.
+**Data usage:** tick **none** of the data types. StepCrumb does not collect or transmit user data: guides, screenshots and recordings stay in the browser, the license check sends only the license key, and the anonymous usage counts send only an event name (such as "export_pdf") with no content, URLs or identifiers, and can be switched off in Settings.
 Then tick all three certifications:
 - I do not sell or transfer user data to third parties, outside of the approved use cases
 - I do not use or transfer user data for purposes that are unrelated to my item's single purpose

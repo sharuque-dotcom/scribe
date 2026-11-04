@@ -2,6 +2,10 @@
 // styles and the crumb-click touch.
 import './index.css'
 import { gsap } from 'gsap'
+import { inject } from '@vercel/analytics'
+
+// Vercel Web Analytics: page views only, no cookies, nothing personal.
+inject()
 
 if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && window.matchMedia('(pointer: fine)').matches) {
   let n = 0

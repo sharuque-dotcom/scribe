@@ -1,5 +1,6 @@
 // Extension service worker: owns recording state, takes screenshots,
 // and writes steps into IndexedDB as they arrive.
+import { count } from '../shared/telemetry'
 import { describeEvent, shouldMerge } from '../shared/describe'
 import { recheckLicense } from '../shared/license'
 import { pixelateRects } from '../shared/redact'
@@ -556,6 +557,7 @@ async function finish(openEditor: boolean, reason?: string): Promise<RecorderSta
       guide.status = 'ready'
       guide.updatedAt = Date.now()
       await putGuide(guide)
+      if (guide.steps.length) count('guide_created')
     }
     if (openEditor) {
       const videoOnly = guide?.mode === 'video' && guide.video

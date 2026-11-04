@@ -1,3 +1,4 @@
+import { count } from '../../shared/telemetry'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadSettings, writeDocument } from '../../shared/ai'
 import { AI_ENABLED } from '../../shared/features'
@@ -108,6 +109,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
     if (needs && !can(needs)) return toast(lockedToast(FEATURES[needs].label))
     const full = wrapHtml(guide.title, markdownToHtml(markdown, shots), { branded })
     const name = `${slug(guide.title)}-${kind}`
+    if (format !== 'copy') count(kind === 'sop' ? 'export_sop' : 'export_training')
     if (format === 'docx') download(`${name}.docx`, await toBlob(await markdownDocx(guide.title, markdown, shots)))
     else if (format === 'html') download(`${name}.html`, full, 'text/html')
     else if (format === 'pdf') printHtml(full)
