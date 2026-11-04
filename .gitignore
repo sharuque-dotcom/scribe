@@ -7,3 +7,4 @@ tests/output
 
 # /brag launch video renders
 brag-output*/
+dist-ssr

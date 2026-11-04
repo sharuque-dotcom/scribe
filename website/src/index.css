@@ -52,4 +52,10 @@ body { @apply bg-paper font-sans text-ink antialiased; }
 /* The Crumbs: pokeable. Where the 3D layer runs, the flat bodies hide but stay
    in place (and clickable) to drive their 3D twins. */
 svg.crumb { cursor: pointer; }
+
+/* The page arrives pre-rendered. While the script loads, keep hidden only what
+   animates in, so it doesn't flash; crawlers and no-JS readers see everything. */
+@media (prefers-reduced-motion: no-preference) {
+  html.js [data-hero], html.js [data-reveal] { visibility: hidden; }
+}
 .crumbs-3d svg.crumb .crumb-body, .crumbs-3d svg.crumb .crumb-shadow { opacity: 0; }

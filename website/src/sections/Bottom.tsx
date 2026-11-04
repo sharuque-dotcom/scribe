@@ -241,8 +241,8 @@ export function Pricing() {
   )
 }
 
-const FAQS: [string, string][] = [
-  ['Is everything really on my computer?', 'Yes. Screenshots, recordings, guides, documents and voiceovers are stored in your browser on your computer, never on our servers. StepCrumb only goes online to check a license key and, once, to download the free voice model. Neither sends anything you capture.'],
+export const FAQS: [string, string][] = [
+  ['Is everything really on my computer?', 'Yes. Screenshots, recordings, guides, documents and voiceovers are stored in your browser on your computer, never on our servers. StepCrumb only goes online to check a license key, to download the free voice model once, and to send anonymous counts such as "1 guide made" (you can switch those off). None of these send anything you capture.'],
   ['Which browsers and computers does it work on?', 'Chrome and Microsoft Edge (and other Chromium browsers) on Windows, Mac, Linux and ChromeOS. Guides come from anything you can open in a browser. Videos can record a tab, a window or your whole screen.'],
   ['Do I need an account?', 'No. The free plan needs nothing at all. When you buy, a license key arrives by email; paste it into StepCrumb (Upgrade → Enter license key) and Pro unlocks.'],
   ['What does “lifetime” mean?', `One payment of $${CONFIG.founding.price} unlocks every paid feature for as long as StepCrumb exists, including updates. Your key works on 2 computers (say, work and home). Getting a new computer? Email us and we'll move it.`],

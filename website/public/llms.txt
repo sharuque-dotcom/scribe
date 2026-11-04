@@ -1,0 +1,38 @@
+# StepCrumb
+
+> StepCrumb is a free Chrome and Edge extension that turns one click-through of a task into a step-by-step guide with screenshots, an SOP, a training module and a narrated video with auto-zoom. Personal details are blurred automatically, there is no account, and screenshots and recordings stay on the user's computer.
+
+## What it does
+- Press Start, do the task in the browser as usual, press Finish. Every click, field and choice becomes a step with a screenshot, a highlight and plain-language text.
+- The same capture produces four results: a step-by-step guide, an SOP (standard operating procedure), a training module, and a narrated MP4 video that zooms where you clicked, with captions.
+- The voiceover is generated on the user's computer; no text is sent to a voice service.
+- Auto-blur: emails, phone numbers, card numbers, Emirates ID numbers and IBANs are blurred on screenshots and video while capturing and kept out of step text, on every plan. Pro adds your own words and patterns.
+- Guide me: plays a guide as a walkthrough on the live website, spotlighting each button so new people learn by doing.
+- Exports: PDF (free), Word, HTML and Markdown (Pro), MP4 video, and SRT/VTT subtitles.
+- Works on any website you can open in Chrome or Microsoft Edge on Windows, macOS, Linux and ChromeOS, including CRMs (for example Salesforce, HubSpot), ERPs, HR portals, admin consoles and internal apps. Video can record a tab, a window or the whole screen.
+
+## Who it's for
+Operations, support, training and IT teams, consultants and anyone who writes how-to guides, SOPs or onboarding material for web apps, especially where screenshots contain personal or customer data.
+
+## Privacy
+- Guides, screenshots, recordings and voiceovers are stored in the browser on the user's computer, never on StepCrumb's servers. No account is needed.
+- StepCrumb goes online only to check a Pro license key (with Polar), to download the free voice model once, and to send anonymous counts such as "1 guide made" (an event name only, no content, URLs or identifiers; can be switched off in Settings).
+
+## Pricing
+- Free: unlimited guides, SOPs and training modules, auto-blur, PDF export, Guide me, narrated videos up to 5 minutes at 720p.
+- Pro: $8/month or $69/year. Adds Word, HTML and Markdown export, PDFs without the StepCrumb footer, 1080p videos of any length without the StepCrumb mark, all voices and backgrounds, your own highlight colour and your own blur words and patterns.
+- Lifetime (first 1,000 founding members): $49 once.
+- 14-day refund.
+
+## How it compares
+- [StepCrumb vs Scribe](https://www.stepcrumb.com/compare/stepcrumb-vs-scribe): automatic blurring, PDF export and narrated video on the free plan, nothing uploaded.
+- [StepCrumb vs Tango](https://www.stepcrumb.com/compare/stepcrumb-vs-tango): unlimited free guides, PDF export and live walkthroughs, no account.
+- [StepCrumb vs Guidde](https://www.stepcrumb.com/compare/stepcrumb-vs-guidde): written guide, SOP and training alongside every video, kept on your computer.
+- [StepCrumb vs Loom](https://www.stepcrumb.com/compare/stepcrumb-vs-loom): a step-by-step guide, not just a video.
+- Choose a team-cloud tool instead if you need a shared online library, sharing links, comments or SSO; StepCrumb shares by exported files.
+
+## Links
+- [Home](https://www.stepcrumb.com/)
+- [FAQ](https://www.stepcrumb.com/#faq)
+- [Pricing](https://www.stepcrumb.com/#pricing)
+- [Privacy policy](https://www.stepcrumb.com/privacy)

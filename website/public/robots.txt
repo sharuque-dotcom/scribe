@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 
+# A summary for AI assistants: https://www.stepcrumb.com/llms.txt
 Sitemap: https://www.stepcrumb.com/sitemap.xml
