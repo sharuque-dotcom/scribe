@@ -114,7 +114,10 @@ export function Hero() {
           <HeroScene />
         </div>
       </div>
-      <div className="mx-auto mt-16 max-w-[1180px] px-3 sm:px-8" data-hero>
+      <div className="mt-14" data-hero>
+        <Strip />
+      </div>
+      <div className="mx-auto mt-14 max-w-[1180px] px-3 sm:px-8" data-hero>
         <HeroDemo />
       </div>
     </section>
