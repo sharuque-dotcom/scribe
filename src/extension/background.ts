@@ -6,8 +6,8 @@ import { pixelateRects } from '../shared/redact'
 import { pickedSource } from '../shared/coords'
 import { loadAutoBlur } from '../shared/autoblur'
 import { maskPii, PII_PHRASE, wholePii } from '../shared/pii'
-import { deleteChunks, deleteGuide, deleteImage, getGuide, putGuide, putImage } from '../shared/db'
-import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
+import { deleteChunks, deleteGuide, deleteImage, getGuide, getImage, putGuide, putImage } from '../shared/db'
+import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, GuideMeState, NRect, RecordSource, RecorderState, RedactSample, Step, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
 
 const IDLE: RecorderState = { recording: false, paused: false, count: 0 }
@@ -248,6 +248,14 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number, p
     showAutoHighlight: event.action !== 'key' && event.action !== 'navigate',
     annotations: [...blurs, ...autoBlurs],
     elementKey: event.elementKey,
+    locator: event.locator && {
+      ...event.locator,
+      // Auto-blur: no personal details in the clues either.
+      label: event.locator.label && maskPii(event.locator.label, blurPrefs),
+      text: event.locator.text && maskPii(event.locator.text, blurPrefs),
+      aria: event.locator.aria && maskPii(event.locator.aria, blurPrefs),
+      href: event.locator.href && maskPii(event.locator.href, blurPrefs),
+    },
     createdAt: now,
   }
 
@@ -588,6 +596,93 @@ async function togglePause(): Promise<RecorderState> {
   return next
 }
 
+// ---------- Guide me ----------
+// Plays a guide on the live website: the page shows a spotlight on each step's
+// element (src/extension/player.ts). Progress is kept here, so it carries on
+// when the page changes.
+
+const guideState = async () => ((await chrome.storage.session.get('guideMe')).guideMe as GuideMeState | undefined) ?? null
+const setGuideState = (g: GuideMeState | null) => (g ? chrome.storage.session.set({ guideMe: g }) : chrome.storage.session.remove('guideMe'))
+
+async function guideStart(guideId: string): Promise<{ ok: boolean; error?: string }> {
+  const guide = await getGuide(guideId)
+  if (!guide) return { ok: false, error: 'Guide not found.' }
+  if ((await getState()).recording) return { ok: false, error: 'Finish the capture in progress first.' }
+  const first = guide.steps.find((s) => s.url && /^https?:/.test(s.url))?.url
+  if (!first) return { ok: false, error: "This guide has no web page to play on. Guide me works with guides captured in the browser." }
+  // A tab already on that page, else one on the same site, else open it.
+  const tabs = await chrome.tabs.query({ windowType: 'normal' })
+  const u = new URL(first)
+  const onPage = tabs.find((t) => t.url && t.url.split('#')[0] === first.split('#')[0])
+  const onSite = tabs.filter((t) => t.url?.startsWith(u.origin)).sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0]
+  let tab = onPage ?? onSite
+  if (!tab?.id) tab = await chrome.tabs.create({ url: first, active: true })
+  else {
+    await chrome.tabs.update(tab.id, { active: true })
+    await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {})
+  }
+  const state: GuideMeState = {
+    guideId,
+    title: guide.title,
+    tabId: tab.id!,
+    index: 0,
+    steps: guide.steps.map((s) => ({ kind: s.kind, title: s.title, detail: s.detail, action: s.action, url: s.url, locator: s.locator, hasImage: !!s.imageId })),
+  }
+  await setGuideState(state)
+  // Start now if the page is ready; a page that's still loading asks when it is.
+  await ensureContentScript(tab.id!)
+  chrome.tabs.sendMessage(tab.id!, { type: 'guide-run', state }).catch(() => {})
+  return { ok: true }
+}
+
+// The step's screenshot for "can't find it" moments: small, with any blurs
+// applied and the element outlined.
+async function guideImage(index: number): Promise<string | null> {
+  const g = await guideState()
+  const guide = g && (await getGuide(g.guideId))
+  const step = guide?.steps.filter((s) => s)[index]
+  if (!step?.imageId) return null
+  const img = await getImage(step.imageId)
+  if (!img) return null
+  const bmp = await createImageBitmap(await (await fetch(img.dataUrl)).blob())
+  // Zoom in around the element (a wide strip of the page), so it's readable in the card.
+  const r = step.targetRect
+  let cx = 0, cy = 0, cw = 1, ch = 1
+  if (r) {
+    cw = Math.min(1, Math.max(0.4, r.w * 3))
+    ch = Math.min(1, (cw * bmp.width * 10) / (16 * bmp.height))
+    cx = Math.min(1 - cw, Math.max(0, r.x + r.w / 2 - cw / 2))
+    cy = Math.min(1 - ch, Math.max(0, r.y + r.h / 2 - ch / 2))
+  }
+  const w = Math.min(640, Math.round(bmp.width * cw))
+  const h = Math.round((w * ch * bmp.height) / (cw * bmp.width))
+  const canvas = new OffscreenCanvas(w, h)
+  const ctx = canvas.getContext('2d')!
+  ctx.drawImage(bmp, cx * bmp.width, cy * bmp.height, cw * bmp.width, ch * bmp.height, 0, 0, w, h)
+  bmp.close()
+  // Positions in the zoomed picture.
+  const map = (q: { x: number; y: number; w: number; h: number }) => ({ x: (q.x - cx) / cw, y: (q.y - cy) / ch, w: q.w / cw, h: q.h / ch })
+  const blurs = step.annotations.filter((a) => a.type === 'blur').map((a) => map({ x: Math.min(a.x1, a.x2), y: Math.min(a.y1, a.y2), w: Math.abs(a.x2 - a.x1), h: Math.abs(a.y2 - a.y1) }))
+  if (blurs.length) pixelateRects(canvas, blurs, 1)
+  if (r) {
+    const m = map(r)
+    ctx.strokeStyle = '#6366f1'
+    ctx.lineWidth = 3
+    ctx.strokeRect(m.x * w - 4, m.y * h - 4, m.w * w + 8, m.h * h + 8)
+  }
+  return blobToDataUrl(await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 }))
+}
+
+// A step that opens a new tab: follow it there.
+chrome.tabs.onCreated.addListener(async (tab) => {
+  const g = await guideState()
+  if (g && tab.openerTabId === g.tabId && tab.id !== undefined) await setGuideState({ ...g, tabId: tab.id })
+})
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const g = await guideState()
+  if (g?.tabId === tabId) await setGuideState(null)
+})
+
 // ---------- messaging ----------
 
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
@@ -613,6 +708,27 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return togglePause()
       case 'discard':
         return discard()
+      case 'guide-start':
+        return guideStart(msg.guideId as string)
+      case 'guide-get': {
+        const g = await guideState()
+        return g && sender.tab?.id === g.tabId ? g : null
+      }
+      case 'guide-advance': {
+        const g = await guideState()
+        if (g) await setGuideState({ ...g, index: msg.index as number })
+        return null
+      }
+      case 'guide-any-origin': {
+        const g = await guideState()
+        if (g) await setGuideState({ ...g, anyOrigin: true })
+        return null
+      }
+      case 'guide-stop':
+        await setGuideState(null)
+        return null
+      case 'guide-image':
+        return guideImage(msg.index as number)
       case 'capture': {
         if (sender.tab?.windowId === undefined) return null
         const event = msg.event as CapturedEvent

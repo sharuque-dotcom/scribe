@@ -7,8 +7,9 @@ import { stepNumbers } from '../../shared/templates'
 import { guideViews, type StepView } from '../../shared/zoom'
 import type { DocKind, Step, StepKind } from '../../shared/types'
 import { uid } from '../../shared/types'
-import { Dropdown, Icon, Toast, type ToastData, AutoText } from '../ui'
+import { Dropdown, Icon, isExtension, Toast, type ToastData, AutoText } from '../ui'
 import { useGuide } from '../useGuide'
+import { canGuideMe, startGuideMe } from '../guideMe'
 import { Annotator, type Tool } from './Annotator'
 import { DocView } from './DocView'
 import { SettingsDialog } from './Settings'
@@ -249,6 +250,18 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
               </a>
             ))}
           </nav>
+          {isExtension && canGuideMe(guide) && (
+            <button
+              className="btn-secondary"
+              title="Play this guide on the real website, step by step"
+              onClick={async () => {
+                const err = await startGuideMe(guide.id)
+                if (err) setToast({ text: err, tone: 'error' })
+              }}
+            >
+              <Icon name="play" /> Guide me
+            </button>
+          )}
           <PlanBadge onOpen={() => setSettingsOpen(true)} />
           <button className="icon-btn" onClick={() => setSettingsOpen(true)} title="Settings" aria-label="Settings">
             <Icon name="settings" />
@@ -262,7 +275,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                     ['docx', 'Word (.docx)'],
                     ['html', 'HTML page'],
                     ['md', 'Markdown (.md)'],
-                    ['json', 'StepCrumb file (.json backup)'],
+                    ['json', 'StepCrumb file (share for Guide me, or backup)'],
                   ] as const
                 ).map(([f, label]) => (
                   <button

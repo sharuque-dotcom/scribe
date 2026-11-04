@@ -2,8 +2,10 @@
 // choices and Enter presses into captured steps, and shows a small control bar.
 import { estimateOrigin, monitorOffset, toVideoPoint, toVideoRect, type ScreenGeom } from '../shared/coords'
 import { cleanLabel, looksSensitive } from '../shared/describe'
-import type { CapturedEvent, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
+import type { CapturedEvent, GuideMeState, NRect, RecorderState, StepAction, TargetInfo } from '../shared/types'
 import { loadAutoBlur, onAutoBlurChange } from '../shared/autoblur'
+import { locatorOf } from './locator'
+import { createPlayer } from './player'
 import { customRules, DEFAULT_AUTO_BLUR, findPii, type AutoBlurSettings } from '../shared/pii'
 
 declare global {
@@ -80,12 +82,20 @@ function init() {
     }
   }
 
+  // Guide me: play a guide on this page if one is running in this tab.
+  const player = createPlayer((msg) => chrome.runtime.sendMessage(msg), (el) => describeTarget(el).label)
+  chrome.runtime.sendMessage({ type: 'guide-get' }).then(
+    (g: GuideMeState | null) => g && player.run(g),
+    () => {},
+  )
+
   chrome.runtime.sendMessage({ type: 'hello' }).then(
     (s: RecorderState | undefined) => s && apply(s),
     () => {},
   )
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type === 'state') apply(msg.state as RecorderState)
+    if (msg?.type === 'guide-run') player.run(msg.state as GuideMeState)
     if (msg?.type === 'prepareCapture') {
       // Hide the bar and reply once a frame without it has been painted.
       // Also report secret fields as they are right now, since the user may
@@ -279,6 +289,8 @@ function init() {
       redactRects: sensitiveRects(),
       piiRects: piiNow(),
       elementKey: elementKey(el),
+      // Guide me: clues for finding this element again (not for key presses).
+      locator: action === 'key' ? undefined : locatorOf(el, target.label),
       url: location.href,
       page: pageId,
       // The page's state just before this action took effect.

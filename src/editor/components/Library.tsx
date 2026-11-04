@@ -5,6 +5,7 @@ import { renderStep } from '../../shared/render'
 import type { CaptureMode, Guide, RecorderState } from '../../shared/types'
 import { uid } from '../../shared/types'
 import { createSampleGuide } from '../sample'
+import { canGuideMe, startGuideMe } from '../guideMe'
 import { PlanBadge } from './PlanBadge'
 import { SettingsDialog } from './Settings'
 import { Icon, isExtension, timeAgo, Toast, type ToastData } from '../ui'
@@ -373,9 +374,24 @@ export function Library() {
                     </span>
                   </div>
                 </a>
-                <button className="icon-btn absolute right-3 top-3 bg-surface/90 opacity-0 shadow-sm focus:opacity-100 group-hover:opacity-100 hover:!text-rec" onClick={() => remove(g)} title="Delete guide" aria-label={`Delete ${g.title}`}>
-                  <Icon name="trash" />
-                </button>
+                <div className="absolute right-3 top-3 flex gap-1.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                  {isExtension && canGuideMe(g) && (
+                    <button
+                      className="inline-flex h-8 items-center gap-1 rounded-md bg-surface/95 px-2.5 text-xs font-semibold text-ink shadow-sm hover:bg-surface"
+                      onClick={async () => {
+                        const err = await startGuideMe(g.id)
+                        if (err) setToast({ text: err, tone: 'error' })
+                      }}
+                      title="Play this guide on the real website"
+                      aria-label={`Guide me: ${g.title}`}
+                    >
+                      <Icon name="play" className="h-3.5 w-3.5" /> Guide me
+                    </button>
+                  )}
+                  <button className="icon-btn bg-surface/90 shadow-sm hover:!text-rec" onClick={() => remove(g)} title="Delete guide" aria-label={`Delete ${g.title}`}>
+                    <Icon name="trash" />
+                  </button>
+                </div>
               </div>
             )
           })}

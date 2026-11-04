@@ -40,6 +40,30 @@ export interface TargetInfo {
   checked?: boolean
 }
 
+// Clues for finding a clicked element again on the live page (Guide me).
+export interface Locator {
+  tag: string
+  role?: string
+  type?: string
+  // Only ids and names that look stable (not generated numbers).
+  id?: string
+  name?: string
+  // data-testid, data-test, data-qa, data-cy …
+  testId?: string
+  aria?: string
+  // The label StepCrumb describes it by, and its own short visible text.
+  label?: string
+  text?: string
+  placeholder?: string
+  // Link target, without the domain.
+  href?: string
+  // The section it sits in: a dialog, form or region name, or the nearest heading.
+  context?: string
+  // Where it was on the whole page (0..1 of the page's width and height).
+  pageX?: number
+  pageY?: number
+}
+
 export type StepKind = 'step' | 'note' | 'heading'
 export type NoteStyle = 'info' | 'tip' | 'warning'
 
@@ -57,6 +81,8 @@ export interface Step {
   click?: NPoint
   targetRect?: NRect
   showAutoHighlight?: boolean
+  // For Guide me: how to find this element again on the live page.
+  locator?: Locator
   annotations: Annotation[]
   // A zoom area the user picked. Overrides automatic zoom.
   crop?: NRect
@@ -209,6 +235,7 @@ export interface CapturedEvent {
   redactRects: NRect[]
   // Personal details on screen at that moment (auto-blur), 0..1 of the page.
   piiRects?: NRect[]
+  locator?: Locator
   elementKey?: string
   url: string
   // Which page (document) the event happened on, so its screenshot can be checked.
@@ -257,3 +284,26 @@ export interface VideoRecording {
 
 export const uid = (): string =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
+
+// Guide me: a guide being played on the live website.
+export interface GuideMeStep {
+  kind: StepKind
+  title: string
+  detail?: string
+  action?: StepAction
+  url?: string
+  locator?: Locator
+  hasImage: boolean
+}
+
+export interface GuideMeState {
+  guideId: string
+  title: string
+  // The tab it's playing in.
+  tabId: number
+  index: number
+  steps: GuideMeStep[]
+  // The learner chose to play it on another site than the one it was recorded
+  // on (e.g. live instead of the test system): match pages by path only.
+  anyOrigin?: boolean
+}

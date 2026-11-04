@@ -45,6 +45,14 @@ Recordings made through the share dialog already show the real pointer, so StepC
 
 While recording video there's no control bar on the page (it would end up in the video). Finish from the popup or with `Alt+Shift+R`.
 
+**Guide me.** Plays a guide on the real website, step by step (like WalkMe, from one recording). Press **Guide me** at the top of a guide, or on its card in the library. StepCrumb uses a tab already on the guide's website (or opens the first page), dims the page and puts a spotlight on the element for each step, with the step text in a small card (Back, Skip, Exit). It moves on by itself when the learner does the step: a click, typing into a field (when they leave it or press Enter), choosing in a dropdown, pressing Enter. Notes show with a Next button. It carries on across page changes and reloads, and follows a step that opens a new tab.
+
+- Finding the element: while capturing, each step saves clues: its label and text, role, stable ids and names (generated ids are ignored), test ids, placeholder, link path, the section it's in (dialog, form, nearest heading) and where it was on the page. On the live page, every element of the same kind is scored against those clues (searching inside shadow DOM too, as Salesforce uses); below a minimum score it doesn't guess.
+- If it can't find the element, the card shows that step's screenshot, zoomed in with the element outlined (blurs applied), plus *I've done this* and *Skip*. If the step belongs to another page, it offers *Go to the page*.
+- If the guide was recorded on another site than the one open (say the test system vs live), it says so and offers *Go to …* or *Stay here* (then pages match by path).
+- Sharing: *Export > StepCrumb file* gives a file the learner opens with *Import* in their library. Learners need StepCrumb installed (free). Guides captured before Guide me existed have no clues; re-capture them for the spotlight to work (the screenshot fallback still does).
+- Free on every plan. Web pages in Chrome and Edge only; content embedded from another site isn't covered yet.
+
 **Edit.** In the editor you can:
 
 - rewrite any step, add detail, reorder, delete (with undo), and insert manual steps, tips or warnings, and section headings
@@ -116,10 +124,13 @@ src/
   extension/
     content.ts      watches clicks, typing, dropdowns, Enter and mouse movement on each page; shows the capture bar
     background.ts   takes screenshots, writes steps, starts/stops video, tracks recording state
+    locator.ts      Guide me: saves an element's clues when capturing; finds it again on the live page
+    player.ts       Guide me: the spotlight and step card on the page
     offscreen.ts    hidden recording page: shows Chrome's share dialog and records the pick, or records the current tab (service workers can't use MediaRecorder)
     recorder-core.ts  shared MediaRecorder start/pause/stop and saving
   shared/
     describe.ts     turns an interaction into instruction text; detects secret fields; merges click+type
+    locate.ts       Guide me: scores how well an element on the live page matches a step's saved clues
     pii.ts          auto-blur: finds emails, phones, cards, Emirates IDs, IBANs and your own words in text
     coords.ts       maps page positions to window/screen video positions
     zoom.ts         decides which part of each screenshot to show (auto zoom rules)
@@ -159,6 +170,7 @@ npm run build && CHROMIUM_PATH=/path/to/chrome npm run e2e
 - **`tests/e2e-voice-long.mjs`** (`npm run e2e:voice`, downloads the real voice model) records a 19-step guide with typing that ends in Enter at the same instant, a very long typed note and fast clicks at the end, generates the voiceover, deletes two lines' voice, then exports. It checks that export makes the missing lines first and that narration plays at every caption.
 - **`tests/e2e-timing.mjs`** first clicks and types at normal human speed and checks every step shows the page just before its action (no trailing, no repeated images), then types a card number and clicks a button that opens another page at full speed. It checks the screenshots show the right page, the card number is pixelated, and the control bar never appears.
 - **`tests/e2e-video.mjs`** records the same flow with video on and checks the recording, step times, mouse path, auto-zoom, the preview (play, add/delete zoom), the free voice, subtitle files and the exported video's size, length and audio track. Pass `--no-voice` to skip the voice model download.
+- **`tests/e2e-guideme.mjs`** records a guide on the test site, then plays it back: the spotlight must land on the right element at every step, the guide must move on with clicks and typing, carry on across a page change and a reload, offer *Go to the page* for a step on another page, offer *Stay here* on a different site, show the screenshot when a button was renamed, and clean up on exit.
 - **`tests/e2e-pii.mjs`** captures a patient page (screenshots + video) and checks that every email, phone number, Emirates ID and card number gets a blur box (only the detail, not the line), that a typed email stays out of the step text, that own words don't apply on the free plan, and that the video records where the details were.
 - **`tests/e2e-screen.mjs`** starts a recording through Chrome's share dialog (answered by Chromium's test switch), picks the entire screen (or a tab), and checks that no StepCrumb window, tab or panel opens, that switching tabs keeps recording, that it's detected as a screen recording, and that clicks land at the right spot in the video. `stopshare` checks that "Stop sharing" keeps the video and carries on with screenshots. Add `video` as the last argument to test video-only mode. (The test switch can't auto-pick a window here, so Window recording is checked by hand.) It needs a real display and mouse, so run it under Xvfb with `xdotool` installed: `xvfb-run -a -s "-screen 0 1600x1000x24" node tests/e2e-screen.mjs out [screen|tab|stopshare] [video]`.
 - **`tests/e2e-ai.mjs`** (`npm run e2e:ai`, which builds with Claude switched on) runs the Claude features against a stand-in API. It checks the exact request (model, fallback, screenshots, structured output) and that step rewriting, undo and streamed documents work. It needs no API key.
