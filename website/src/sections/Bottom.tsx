@@ -330,9 +330,11 @@ export function Footer() {
         <a href="/terms.html" className="hover:text-ink">
           Terms
         </a>
-        <a href="/compare/stepcrumb-vs-scribe" className="hover:text-ink">
-          StepCrumb vs Scribe
-        </a>
+        {['Scribe', 'Tango', 'Guidde', 'Loom'].map((n) => (
+          <a key={n} href={`/compare/stepcrumb-vs-${n.toLowerCase()}`} className="hover:text-ink">
+            vs {n}
+          </a>
+        ))}
         <a href={`mailto:${CONFIG.contactEmail}`} className="hover:text-ink">
           Contact
         </a>
