@@ -97,6 +97,35 @@ PAGES = [
   },
 ]
 
+
+# The Chrome logo (same drawing as the homepage's ChromeIcon), for the install buttons.
+def _chrome_svg(cls):
+  import math
+  c, R, r = 24, 22, 10
+  d = math.sqrt(R * R - r * r)
+  pts = []
+  for k in range(3):
+    a = math.radians(-90 + 120 * k)
+    dr = math.radians(120 * k)
+    t = (c + r * math.cos(a), c + r * math.sin(a))
+    pts.append((t, (t[0] + d * math.cos(dr), t[1] + d * math.sin(dr))))
+  f = lambda n: f'{n:.2f}'
+  paths = ''
+  for k, fill in enumerate(['#EA4335', '#FBBC04', '#34A853']):
+    (at, ap), (bt, bp) = pts[k], pts[(k + 2) % 3]
+    paths += f'<path d="M{f(at[0])} {f(at[1])}L{f(ap[0])} {f(ap[1])}A{R} {R} 0 0 0 {f(bp[0])} {f(bp[1])}L{f(bt[0])} {f(bt[1])}A{r} {r} 0 0 1 {f(at[0])} {f(at[1])}Z" fill="{fill}"/>'
+  return f'<svg viewBox="0 0 48 48" class="{cls}" aria-hidden="true">{paths}<circle cx="24" cy="24" r="10" fill="#fff"/><circle cx="24" cy="24" r="8" fill="#1A73E8"/></svg>'
+
+CHROME_SM = _chrome_svg('h-4 w-4 flex-none')
+CHROME = _chrome_svg('h-5 w-5 flex-none')
+
+def with_chrome(s):
+  # Puts the Chrome logo in every install button (idempotent).
+  s = s.replace('text-paper hover:opacity-90">Add to Chrome, it\'s free</a>', 'text-paper hover:opacity-90">' + CHROME_SM + 'Add to Chrome, it\'s free</a>')
+  s = s.replace('class="btn-dark px-7 py-3.5 text-[16px]">Try StepCrumb free</a>', 'class="btn-dark px-7 py-3.5 text-[16px]">' + CHROME + 'Add to Chrome, it\'s free</a>')
+  s = s.replace('hover:-translate-y-0.5">Add StepCrumb to Chrome</a>', 'hover:-translate-y-0.5">' + CHROME + 'Add StepCrumb to Chrome</a>')
+  return s
+
 ALL = [('scribe', 'Scribe')] + [(p['slug'], p['name']) for p in PAGES]
 
 def more(current):
@@ -222,7 +251,7 @@ def page(p):
 '''
 
 for p in PAGES:
-  (ROOT / 'compare' / f"stepcrumb-vs-{p['slug']}.html").write_text(page(p))
+  (ROOT / 'compare' / f"stepcrumb-vs-{p['slug']}.html").write_text(with_chrome(page(p)))
 
 # The hand-written Scribe page: add the links to the others and keep its privacy answer current.
 scribe = ROOT / 'compare' / 'stepcrumb-vs-scribe.html'
@@ -232,5 +261,5 @@ s = s.replace(old, ONLINE)
 marker = '      <section class="mb-16 rounded-[40px] bg-ink'
 if 'More comparisons' not in s:
   s = s.replace(marker, more('scribe') + '\n' + marker, 1)
-scribe.write_text(s)
+scribe.write_text(with_chrome(s))
 print('ok', [p['slug'] for p in PAGES])
