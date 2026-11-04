@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { CONFIG } from '../config'
 import { HeroDemo } from './HeroDemo'
-import { CrumbMark, HeroTrail } from './Crumbs'
+import { CrumbMark } from './Crumbs'
+import { HeroScene, SceneClick, SceneEverything, SceneStart } from './Scenes'
 
 export function Logo({ className = '' }: { className?: string }) {
   return (
@@ -81,34 +82,38 @@ export function Hero() {
   return (
     <section className="relative overflow-hidden">
       {/* soft colour wash behind the hero */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[720px] bg-[radial-gradient(60%_50%_at_50%_0%,rgba(129,140,248,.22),transparent_70%),radial-gradient(40%_40%_at_85%_20%,rgba(249,115,22,.12),transparent_70%)]" />
-      <div className="mx-auto max-w-[1240px] px-5 pt-12 text-center sm:px-8 lg:pt-20">
-        <a href="#features" className="mx-auto mb-8 inline-flex items-center gap-2 rounded-full border border-line bg-white/70 px-3 py-1.5 text-[13px] font-medium text-soft shadow-sm backdrop-blur hover:text-ink" data-hero>
-          <span className="rounded-full bg-ember px-2 py-0.5 text-[11px] font-semibold text-white">New</span>
-          Narrated videos, made on your computer →
-        </a>
-        <h1 className="display mx-auto max-w-5xl text-[54px] sm:text-[84px] lg:text-[104px]" data-hero>
-          Show it once.
-          <br />
-          <span className="bg-gradient-to-r from-brand via-violet-500 to-ember bg-clip-text text-transparent">Explain it forever.</span>
-        </h1>
-        <p className="mx-auto mt-7 max-w-2xl text-[18px] leading-relaxed text-soft sm:text-[20px]" data-hero>
-          Click through any task in your browser. StepCrumb turns it into a <b className="font-semibold text-ink">step-by-step guide</b>, an <b className="font-semibold text-ink">SOP</b>, a <b className="font-semibold text-ink">training module</b> and a <b className="font-semibold text-ink">narrated video</b> that zooms where you click. Nothing you capture leaves your computer.
-        </p>
-        <div className="mt-9 flex flex-wrap justify-center gap-3" data-hero>
-          <a href={CONFIG.chromeStoreUrl} className="btn-dark px-7 py-3.5 text-[16px]">
-            <ChromeIcon /> Add to Chrome, it's free
+      <div className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[760px] bg-[radial-gradient(55%_50%_at_75%_10%,rgba(129,140,248,.22),transparent_70%),radial-gradient(40%_40%_at_15%_30%,rgba(249,115,22,.12),transparent_70%)]" />
+      <div className="mx-auto grid max-w-[1240px] items-center gap-12 px-5 pt-10 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:pt-16">
+        <div className="text-center lg:text-left">
+          <a href="#meet" className="mb-8 inline-flex items-center gap-2 rounded-full border border-line bg-white/70 px-3 py-1.5 text-[13px] font-medium text-soft shadow-sm backdrop-blur hover:text-ink" data-hero>
+            <span className="rounded-full bg-ember px-2 py-0.5 text-[11px] font-semibold text-white">New</span>
+            Meet the Crumbs, your documentation crew →
           </a>
-          <a href={CONFIG.checkoutUrl} className="btn-ghost px-7 py-3.5 text-[16px]">
-            Lifetime access · ${CONFIG.founding.price}
-          </a>
+          <h1 className="display text-[52px] sm:text-[76px] lg:text-[84px]" data-hero>
+            Show it once.
+            <br />
+            <span className="bg-gradient-to-r from-brand via-violet-500 to-ember bg-clip-text text-transparent">Explain it forever.</span>
+          </h1>
+          <p className="mx-auto mt-7 max-w-xl text-[18px] leading-relaxed text-soft sm:text-[20px] lg:mx-0" data-hero>
+            Click through any task in your browser. The Crumbs follow every click and hand back a <b className="font-semibold text-ink">step-by-step guide</b>, an <b className="font-semibold text-ink">SOP</b>, a <b className="font-semibold text-ink">training module</b> and a <b className="font-semibold text-ink">narrated video</b>. Nothing you capture leaves your computer.
+          </p>
+          <div className="mt-9 flex flex-wrap justify-center gap-3 lg:justify-start" data-hero>
+            <a href={CONFIG.chromeStoreUrl} className="btn-dark px-7 py-3.5 text-[16px]" data-crumb-look>
+              <ChromeIcon /> Add to Chrome, it's free
+            </a>
+            <a href={CONFIG.checkoutUrl} className="btn-ghost px-7 py-3.5 text-[16px]" data-crumb-look>
+              Lifetime access · ${CONFIG.founding.price}
+            </a>
+          </div>
+          <p className="mt-4 text-[13px] text-soft" data-hero>
+            Chrome & Edge · Windows, Mac, Linux, ChromeOS · No account needed
+          </p>
         </div>
-        <p className="mt-4 text-[13px] text-soft" data-hero>
-          Chrome & Edge · Windows, Mac, Linux, ChromeOS · No account needed
-        </p>
-        <HeroTrail />
+        <div data-hero>
+          <HeroScene />
+        </div>
       </div>
-      <div className="mx-auto mt-14 max-w-[1180px] px-3 sm:px-8" data-hero>
+      <div className="mx-auto mt-16 max-w-[1180px] px-3 sm:px-8" data-hero>
         <HeroDemo />
       </div>
     </section>
@@ -140,28 +145,29 @@ export function Strip() {
 }
 
 const HOW = [
-  ['Press Start', 'Open the site you want to explain and press the StepCrumb button. Then work the way you always do.', 'art-dusk'],
-  ['Click through', 'Every click, field and choice becomes a step: a screenshot, a highlight and plain words. Secrets are blurred as you go.', 'art-meadow'],
-  ['Get everything', 'A guide, an SOP, a training module and a narrated video, all from those same clicks. Edit what you like, then export.', 'art-violet'],
-]
+  ['Press Start', 'Open the site you want to explain and press the StepCrumb button. Then work the way you always do.', SceneStart],
+  ['Click through', 'Every click, field and choice becomes a step: a screenshot, a highlight and plain words. Shh blurs anything private as you go.', SceneClick],
+  ['Get everything', 'A guide, an SOP, a training module and a narrated video, all from those same clicks. Edit what you like, then export.', SceneEverything],
+] as const
 
 export function HowItWorks() {
   return (
     <section id="how" className="mx-auto max-w-[1240px] px-5 py-24 sm:px-8 sm:py-32">
       <div className="mx-auto max-w-3xl text-center" data-reveal>
         <p className="eyebrow mb-4 inline-flex items-center gap-3"><CrumbMark className="h-4 w-10" />How it works</p>
-        <h2 className="display text-[44px] sm:text-[64px]">Every click leaves a crumb.</h2>
-        <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-soft">StepCrumb follows the trail you leave and turns it into four things people can follow: a guide, an SOP, a training module and a narrated video.</p>
+        <h2 className="display text-[44px] sm:text-[64px]">Three steps. Four results.</h2>
+        <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-soft">Press Start, click through as usual, and the Crumbs hand back a guide, an SOP, a training module and a narrated video.</p>
       </div>
       <div className="relative mt-16 grid gap-6 md:grid-cols-3">
         <div className="pointer-events-none absolute left-[16.6%] right-[16.6%] top-[-29px] hidden h-[3px] bg-[radial-gradient(circle,rgba(21,20,18,.35)_1.2px,transparent_1.6px)] bg-[length:9px_3px] md:block" aria-hidden />
-        {HOW.map(([t, d, art], i) => (
+        {HOW.map(([t, d, Scene], i) => (
           <div key={t} className="group relative" data-reveal>
             <span className={`absolute left-1/2 top-[-38px] z-10 hidden h-5 w-5 -translate-x-1/2 rounded-full ring-4 ring-paper md:block ${i === 1 ? 'bg-[#818CF8]' : 'bg-ember'}`} aria-hidden />
-            <div className={`art ${art} grid aspect-[4/3] place-items-center rounded-[28px]`}>
-              <span className="display text-[120px] text-white/90 transition-transform duration-500 group-hover:scale-110">{i + 1}</span>
-            </div>
-            <h3 className="mt-6 text-[22px] font-semibold">{t}</h3>
+            <Scene />
+            <h3 className="mt-6 flex items-center gap-3 text-[22px] font-semibold">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-[14px] text-paper">{i + 1}</span>
+              {t}
+            </h3>
             <p className="mt-2 text-[16px] leading-relaxed text-soft">{d}</p>
           </div>
         ))}

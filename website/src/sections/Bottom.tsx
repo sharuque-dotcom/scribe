@@ -306,7 +306,7 @@ export function FinalCta() {
         <h2 className="display mx-auto max-w-3xl text-[44px] sm:text-[72px]">Leave a trail anyone can follow.</h2>
         <p className="mx-auto mt-5 max-w-xl text-[18px] text-white/85">Your next SOP, training module and video are one click-through away.</p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <a href={CONFIG.chromeStoreUrl} className="btn bg-white px-7 py-3.5 text-[16px] text-ink hover:-translate-y-0.5 hover:shadow-float">
+          <a href={CONFIG.chromeStoreUrl} className="btn bg-white px-7 py-3.5 text-[16px] text-ink hover:-translate-y-0.5 hover:shadow-float" data-crumb-look>
             <ChromeIcon /> Add to Chrome, it's free
           </a>
           <a href={CONFIG.checkoutUrl} className="btn border border-white/80 px-7 py-3.5 text-[16px] text-white hover:bg-white hover:text-ink">
