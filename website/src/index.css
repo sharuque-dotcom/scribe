@@ -48,3 +48,8 @@ body { @apply bg-paper font-sans text-ink antialiased; }
 .legal p, .legal li { @apply text-[16px] leading-relaxed text-ink/85; }
 .legal ul { @apply ml-5 list-disc space-y-2; }
 .legal a { @apply text-brand underline underline-offset-2; }
+
+/* The Crumbs: pokeable. Where the 3D layer runs, the flat bodies hide but stay
+   in place (and clickable) to drive their 3D twins. */
+svg.crumb { cursor: pointer; }
+.crumbs-3d svg.crumb .crumb-body, .crumbs-3d svg.crumb .crumb-shadow { opacity: 0; }

@@ -209,6 +209,32 @@ export function hop(tl: gsap.core.Timeline, el: Element, at: gsap.Position, heig
     .to(body, { scaleY: 1.08, scaleX: 0.94, duration: 0.2 }, '<')
     .to(el, { y: 0, duration: 0.24, ease: 'power2.in' }, '>')
     .to(body, { scaleY: 0.86, scaleX: 1.1, duration: 0.1, ease: 'power2.out' }, '>')
-    .to(body, { scaleY: 1, scaleX: 1, duration: 0.25, ease: 'back.out(3)' }, '>')
+    .to(body, { scaleY: 1, scaleX: 1, duration: 0.7, ease: 'elastic.out(1.1, 0.32)' }, '>')
   return tl
+}
+
+// Poke a Crumb (click it): it jumps, wobbles and blinks. The event 'crumb-poke'
+// lets its 3D twin spin along.
+export function useCrumbPoke() {
+  useEffect(() => {
+    if (reducedMotion()) return
+    const on = (e: PointerEvent) => {
+      if (e.button !== 0) return
+      const svg = (e.target as Element | null)?.closest?.('svg.crumb') as SVGSVGElement | null
+      if (!svg || gsap.isTweening(svg)) return
+      const body = svg.querySelector('.crumb-body')
+      const tl = gsap.timeline()
+      tl.to(body, { scaleY: 0.75, scaleX: 1.18, duration: 0.1, ease: 'power2.out' })
+        .to(svg, { y: -34, duration: 0.3, ease: 'power2.out' }, '>')
+        .to(body, { scaleY: 1.12, scaleX: 0.9, rotation: gsap.utils.random([-14, 14]), duration: 0.22 }, '<')
+        .to(svg, { y: 0, duration: 0.26, ease: 'power2.in' }, '>')
+        .to(body, { scaleY: 0.8, scaleX: 1.14, rotation: 0, duration: 0.1, ease: 'power2.out' }, '>')
+        .to(body, { scaleY: 1, scaleX: 1, duration: 0.9, ease: 'elastic.out(1.2, 0.28)' }, '>')
+      const eyes = svg.querySelector('.blink')
+      if (eyes) gsap.to(eyes, { scaleY: 0.1, duration: 0.07, yoyo: true, repeat: 1, delay: 0.05 })
+      svg.dispatchEvent(new Event('crumb-poke'))
+    }
+    addEventListener('pointerdown', on)
+    return () => removeEventListener('pointerdown', on)
+  }, [])
 }

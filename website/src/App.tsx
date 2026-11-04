@@ -5,13 +5,14 @@ import { Compare, Faq, FinalCta, Footer, Founder, Pricing, Privacy, UseCases } f
 import { Features } from './sections/Features'
 import { Hero, HowItWorks, Nav, Strip } from './sections/Top'
 import { TrailDivider, useCrumbClicks } from './sections/Crumbs'
-import { useCrumbEyes } from './sections/Cast'
+import { useCrumbEyes, useCrumbPoke } from './sections/Cast'
 import { MeetTheCrumbs } from './sections/Scenes'
 
 export function App() {
   useReveal()
   useCrumbClicks()
   useCrumbEyes()
+  useCrumbPoke()
   useEffect(() => {
     if (reducedMotion()) return
     const ctx = gsap.context(() => {

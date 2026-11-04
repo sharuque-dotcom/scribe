@@ -5,6 +5,8 @@ import { resolve } from 'node:path'
 export default defineConfig({
   plugins: [react()],
   build: {
+    // The 3D Crumbs chunk is big but loads lazily, after the page settles.
+    chunkSizeWarningLimit: 900,
     rollupOptions: {
       input: {
         main: resolve(import.meta.dirname, 'index.html'),

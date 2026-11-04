@@ -1,8 +1,47 @@
 // Scenes the Crumbs act out: the hero (a capture, start to finished guide), the
 // three How it works steps, and the cast line-up that explains the name.
 import { gsap } from 'gsap'
-import { useLoop, typeInto } from '../motion'
+import { lazy, Suspense, useEffect, useRef, useState, type RefObject } from 'react'
+import { reducedMotion, useLoop, typeInto } from '../motion'
 import { CAST, Crumb, hop, type CrumbKind } from './Cast'
+
+// ---------- 3D: only where it runs well; otherwise the flat Crumbs stay ----------
+
+const Crumbs3D = lazy(() => import('./Crumbs3D'))
+
+let can3DCache: boolean | undefined
+function can3D() {
+  if (can3DCache !== undefined) return can3DCache
+  can3DCache = false
+  if (typeof window === 'undefined' || reducedMotion()) return false
+  if (!matchMedia('(min-width: 900px) and (pointer: fine)').matches) return false
+  if ((navigator.hardwareConcurrency ?? 0) < 4) return false
+  if (new URLSearchParams(location.search).has('flat')) return false
+  try {
+    const c = document.createElement('canvas')
+    can3DCache = !!(c.getContext('webgl2') || c.getContext('webgl'))
+  } catch {
+    // No WebGL: stay flat.
+  }
+  return can3DCache
+}
+
+// Mounts the 3D layer over `scene` once the page has settled.
+function Layer3D({ scene }: { scene: RefObject<HTMLElement> }) {
+  const [on, setOn] = useState(false)
+  useEffect(() => {
+    if (!can3D()) return
+    const go = () => setOn(true)
+    const idle = typeof requestIdleCallback === 'function'
+    const id = idle ? requestIdleCallback(go, { timeout: 2500 }) : window.setTimeout(go, 1200)
+    return () => (idle ? cancelIdleCallback(id) : window.clearTimeout(id))
+  }, [])
+  return on ? (
+    <Suspense fallback={null}>
+      <Crumbs3D scene={scene} />
+    </Suspense>
+  ) : null
+}
 
 // ---------- Hero: the Crumbs capture a task and hand back a guide ----------
 
@@ -156,6 +195,7 @@ export function HeroScene() {
           <Crumb kind={k} size={100} className="h-auto w-full" />
         </div>
       ))}
+      <Layer3D scene={ref} />
     </div>
   )
 }
@@ -342,6 +382,26 @@ export function MeetTheCrumbs() {
     all.forEach((el, i) => hop(tl, el.querySelector('.cast-body')!, i * 0.12, 18))
     return tl
   }, 0)
+  // The line-up drops in one by one as it scrolls into view, with a bounce.
+  const grid = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = grid.current
+    if (!root || reducedMotion()) return
+    let tw: gsap.core.Tween | undefined
+    const ctx = gsap.context(() => {
+      tw = gsap.from(root.querySelectorAll('.cast-drop'), { y: -160, autoAlpha: 0, duration: 1.1, ease: 'bounce.out', stagger: 0.09, paused: true })
+    }, root)
+    const io = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      tw?.play()
+      io.disconnect()
+    }, { rootMargin: '0px 0px -15% 0px' })
+    io.observe(root)
+    return () => {
+      io.disconnect()
+      ctx.revert()
+    }
+  }, [])
   return (
     <section className="mx-auto max-w-[1240px] px-5 pt-24 sm:px-8 sm:pt-32" aria-labelledby="meet">
       <div className="mx-auto max-w-3xl text-center" data-reveal>
@@ -353,16 +413,21 @@ export function MeetTheCrumbs() {
         </h2>
         <p className="mx-auto mt-5 max-w-xl text-[18px] leading-relaxed text-soft">While you work, a small crew follows your trail. Each one has a job, and together they turn your clicks into something anyone can follow.</p>
       </div>
-      <div ref={ref} className="mt-14 grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-4 lg:grid-cols-7">
+      <div ref={grid} className="relative mt-14">
+       <div ref={ref} className="grid grid-cols-2 gap-x-4 gap-y-10 sm:grid-cols-4 lg:grid-cols-7">
         {CAST.map((m) => (
-          <div key={m.kind} className="cast-member group text-center" data-reveal>
-            <div className="cast-body mx-auto w-[88px] transition-transform duration-300 group-hover:-translate-y-2 group-hover:rotate-[-4deg]">
-              <Crumb kind={m.kind} size={100} className="h-auto w-full" />
+          <div key={m.kind} className="cast-member group text-center">
+            <div className="cast-drop mx-auto w-[88px]">
+              <div className="cast-body transition-transform duration-300 group-hover:-translate-y-2 group-hover:rotate-[-4deg]">
+                <Crumb kind={m.kind} size={100} className="h-auto w-full" />
+              </div>
             </div>
             <p className="mt-3 text-[17px] font-semibold">{m.name}</p>
             <p className="text-[14px] text-soft">{m.job}</p>
           </div>
         ))}
+       </div>
+       <Layer3D scene={grid} />
       </div>
     </section>
   )
