@@ -67,7 +67,7 @@ export async function exportVideo(opts: {
   const limits = opts.limits ?? videoLimits(false)
   const settings = video.settings
   if (limits.maxMs !== undefined && plan.map.outDuration > limits.maxMs) {
-    throw new Error('Free exports are up to 5 minutes. Trim the video, or upgrade to StepCrumb Pro for longer videos.')
+    throw new Error(`Free exports are up to ${Math.round(limits.maxMs / 60000)} minutes. Trim the video, or upgrade to StepCrumb Pro for longer videos.`)
   }
   const input = new Input({ source: new BlobSource(recording), formats: ALL_FORMATS })
   const track = await input.getPrimaryVideoTrack()

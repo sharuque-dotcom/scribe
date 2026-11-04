@@ -6,7 +6,7 @@ import type { CapturedEvent, GuideMeState, NRect, RecorderState, StepAction, Tar
 import { loadAutoBlur, onAutoBlurChange } from '../shared/autoblur'
 import { locatorOf } from './locator'
 import { createPlayer } from './player'
-import { customRules, DEFAULT_AUTO_BLUR, findPii, type AutoBlurSettings } from '../shared/pii'
+import { customRules, DEFAULT_AUTO_BLUR, findPii, piiInProgress, type AutoBlurSettings } from '../shared/pii'
 
 declare global {
   interface Window {
@@ -24,7 +24,13 @@ function init() {
   // Values already recorded per field, so a change + Enter doesn't make two steps.
   const recordedValues = new WeakMap<Element, string>()
 
-  const bar = createBar()
+  // Before a bar button acts, record what was typed in the focused field, so the
+  // typing step lands before Finish/Pause/Discard.
+  const bar = createBar(() => {
+    const f = document.activeElement
+    if (f && f !== document.body) settleField(f)
+    if (pendingField) settleField(pendingField.el)
+  })
 
   // Auto-blur: personal details shown on the page (emails, phone numbers, …).
   let autoBlur: AutoBlurSettings = DEFAULT_AUTO_BLUR
@@ -192,6 +198,10 @@ function init() {
     (e) => {
       noteOrigin(e)
       if (!active() || !e.isTrusted || e.button !== 0) return
+      // Presses on our own bar are handled by the bar (it records the typing
+      // first, then acts). Recording it here would hide the bar under the
+      // pointer for its screenshot, and the click would be lost.
+      if (bar.contains(e)) return
       const path = e.composedPath()
       // Browsers report typed text on blur, which comes after this click.
       // Record it now so the steps stay in the order they happened.
@@ -214,8 +224,10 @@ function init() {
   document.addEventListener(
     'change',
     (e) => {
-      if (!active() || !e.isTrusted) return
+      if (!active()) return
       const el = e.target
+      const inUse = el instanceof Element && (el === document.activeElement || pendingField?.el === el)
+      if (!e.isTrusted && !inUse) return
       if (el instanceof HTMLSelectElement) {
         if (pendingField?.el === el) pendingField = null
         const value = el.selectedOptions[0]?.text ?? el.value
@@ -467,7 +479,9 @@ function piiRects(settings: AutoBlurSettings, custom: RegExp[], ours: (n: Node) 
     }
     // Values typed into (or shown in) fields: cover the field.
     document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input:not([type=hidden]):not([type=password]), textarea').forEach((el) => {
-      if (el.value && findPii(el.value, settings, custom).length) push(el.getBoundingClientRect())
+      // The field being typed in is blurred as soon as it looks like a detail in progress.
+      const typing = el === document.activeElement && piiInProgress(el.value, settings)
+      if (el.value && (typing || findPii(el.value, settings, custom).length)) push(el.getBoundingClientRect())
     })
   } catch {
     // A page we can't read: nothing extra to blur.
@@ -477,7 +491,7 @@ function piiRects(settings: AutoBlurSettings, custom: RegExp[], ours: (n: Node) 
 
 // ---------- recording control bar ----------
 
-function createBar() {
+function createBar(beforeAction: () => void = () => {}) {
   const host = document.createElement('div')
   host.style.cssText = 'all:initial;position:fixed;z-index:2147483647;bottom:20px;right:20px;'
   const root = host.attachShadow({ mode: 'closed' })
@@ -492,7 +506,7 @@ function createBar() {
       .paused .dot{background:#f59e0b;animation:none}
       @keyframes p{50%{opacity:.35}}
       .time{font-variant-numeric:tabular-nums;font-weight:600;min-width:38px}
-      .label{color:#cbd5e1;white-space:nowrap}
+      .label{color:#cbd5e1;white-space:nowrap;display:inline-block;min-width:74px}
       button{all:unset;cursor:pointer;padding:6px 12px;border-radius:999px;background:#374151;color:#fff;font-weight:600;white-space:nowrap}
       button:hover{background:#4b5563}
       button:focus-visible{outline:2px solid #a5b4fc;outline-offset:1px}
@@ -516,14 +530,24 @@ function createBar() {
   const pauseBtn = root.querySelector('.pause') as HTMLButtonElement
   const discardBtn = root.querySelector('.discard') as HTMLButtonElement
   const minBtn = root.querySelector('.min') as HTMLButtonElement
-  root.querySelector('.stop')!.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'stop' }))
-  pauseBtn.addEventListener('click', () => chrome.runtime.sendMessage({ type: 'togglePause' }))
+  // Pressing a bar button mustn't move focus out of the page's field: the blur
+  // would record the typing step mid-click and re-draw the bar, losing the click.
+  root.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()))
+  root.querySelector('.stop')!.addEventListener('click', () => {
+    beforeAction()
+    void chrome.runtime.sendMessage({ type: 'stop' })
+  })
+  pauseBtn.addEventListener('click', () => {
+    beforeAction()
+    void chrome.runtime.sendMessage({ type: 'togglePause' })
+  })
 
   // Discard asks once more on the bar itself (no pop-up over the page).
   let sureTimer = 0
   discardBtn.addEventListener('click', () => {
     if (discardBtn.classList.contains('sure')) {
       window.clearTimeout(sureTimer)
+      beforeAction()
       void chrome.runtime.sendMessage({ type: 'discard' })
       return
     }

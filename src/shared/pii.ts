@@ -156,3 +156,14 @@ export function wholePii(text: string, settings: AutoBlurSettings): PiiKind | nu
   const found = findPii(t, settings)
   return found.length === 1 && found[0].start === 0 && found[0].end === t.length ? found[0].kind : null
 }
+
+// A value still being typed that is on its way to a personal detail: an email
+// once it has an @, a number once it has 6 digits (phone, card, ID, IBAN; years and small amounts stay readable). Used
+// to blur the field while someone types, before the full pattern appears.
+export function piiInProgress(value: string, settings: AutoBlurSettings): boolean {
+  if (!settings.on || !value) return false
+  const k = settings.kinds
+  if (k.email && value.includes('@')) return true
+  if ((k.phone || k.card || k.emiratesId || k.iban) && (value.match(/\d/g)?.length ?? 0) >= 6) return true
+  return findPii(value, settings).length > 0
+}

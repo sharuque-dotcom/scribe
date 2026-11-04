@@ -173,7 +173,7 @@ export function DocView({ kind, guide, rendered, onSave, needKey, renderForAi, t
                           }}
                         >
                           {label}
-                          {exportFeature(f) && !can(exportFeature(f)!) && <span className="ml-auto text-xs" title="StepCrumb Pro">🔒</span>}
+                          {exportFeature(f) && !can(exportFeature(f)!) && <span className="ml-auto rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800" title="StepCrumb Pro">Pro</span>}
                         </button>
                       ))}
                     </>

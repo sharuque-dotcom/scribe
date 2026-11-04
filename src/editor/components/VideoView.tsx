@@ -529,7 +529,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
               </button>
             </div>
             <p className="text-xs text-muted">
-              {can('video1080') ? '1080p, 30 fps.' : 'Free plan: 720p with a small StepCrumb mark, up to 2 minutes.'} Captions and voice are built into the video; the subtitle files are for YouTube or a learning platform.
+              {can('video1080') ? '1080p, 30 fps.' : `Free plan: 720p with a small StepCrumb mark, up to ${FREE_LIMITS.videoMaxMs / 60000} minutes.`} Captions and voice are built into the video; the subtitle files are for YouTube or a learning platform.
             </p>
             {!can('video1080') && (
               <button className="text-xs font-medium text-accent hover:underline" onClick={openCheckout}>
@@ -538,7 +538,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
             )}
             {limits.maxMs !== undefined && plan.map.outDuration > limits.maxMs && (
               <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900" role="alert">
-                This video is {fmt(plan.map.outDuration)} long. Trim it to 2:00, or{' '}
+                This video is {fmt(plan.map.outDuration)} long. Trim it to {fmt(limits.maxMs)}, or{' '}
                 <button className="font-semibold underline" onClick={openCheckout}>
                   upgrade to Pro
                 </button>{' '}
@@ -630,7 +630,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                     className={`h-8 flex-1 rounded-md border ${settings.background === b.id ? 'ring-2 ring-accent ring-offset-1' : 'border-line'}`}
                     style={{ background: b.css }}
                   >
-                    {!can('allBackgrounds') && b.id !== FREE_LIMITS.background && <span className="text-xs">🔒</span>}
+                    {!can('allBackgrounds') && b.id !== FREE_LIMITS.background && <span className="rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800">Pro</span>}
                   </button>
                 ))}
               </div>
@@ -648,7 +648,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
               {VOICES.map((v) => (
                 <option key={v.id} value={v.id} disabled={!can('allVoices') && v.id !== FREE_LIMITS.voice}>
                   {v.label}
-                  {!can('allVoices') && v.id !== FREE_LIMITS.voice ? ' 🔒' : ''}
+                  {!can('allVoices') && v.id !== FREE_LIMITS.voice ? ' (Pro)' : ''}
                 </option>
               ))}
             </select>

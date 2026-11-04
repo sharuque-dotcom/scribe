@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_AUTO_BLUR, findPii, ibanValid, luhn, maskPii, wholePii, type AutoBlurSettings } from './pii'
+import { DEFAULT_AUTO_BLUR, findPii, ibanValid, luhn, maskPii, piiInProgress, wholePii, type AutoBlurSettings } from './pii'
 
 const kinds = (text: string, s: AutoBlurSettings = DEFAULT_AUTO_BLUR) => findPii(text, s).map((m) => [m.kind, text.slice(m.start, m.end)])
 
@@ -64,5 +64,15 @@ describe('checks', () => {
   it('iban', () => {
     expect(ibanValid('GB82 WEST 1234 5698 7654 32')).toBe(true)
     expect(ibanValid('GB00 WEST 1234 5698 7654 32')).toBe(false)
+  })
+})
+
+describe('typing in progress', () => {
+  it('flags a half-typed email or number before it is complete', () => {
+    expect(piiInProgress('vid@exa', DEFAULT_AUTO_BLUR)).toBe(true)
+    expect(piiInProgress('+971 50 1', DEFAULT_AUTO_BLUR)).toBe(true)
+    expect(piiInProgress('2026', DEFAULT_AUTO_BLUR)).toBe(false)
+    expect(piiInProgress('Jordan', DEFAULT_AUTO_BLUR)).toBe(false)
+    expect(piiInProgress('vid@exa', { ...DEFAULT_AUTO_BLUR, kinds: { ...DEFAULT_AUTO_BLUR.kinds, email: false } })).toBe(false)
   })
 })

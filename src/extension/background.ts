@@ -733,11 +733,16 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         if (sender.tab?.windowId === undefined) return null
         const event = msg.event as CapturedEvent
         // Take the screenshot now, before the click can open another page;
-        // writing the step waits its turn so steps stay in order.
-        const st = await getState()
-        const shot = st.recording && !st.paused && st.mode !== 'video' ? shotForEvent(sender.tab.windowId, sender.tab.id, event) : null
-        shot?.catch(() => {})
-        return enqueue(() => addStep(event, sender.tab!.windowId, sender.tab!.id, shot))
+        // writing the step waits its turn so steps stay in order. The step joins
+        // the queue straight away (before anything is awaited), so a Finish that
+        // arrives right after it (typing, then Finish on the bar) waits for it.
+        const tab = sender.tab
+        const shot = getState().then((st) => (st.recording && !st.paused && st.mode !== 'video' ? shotForEvent(tab.windowId, tab.id, event) : null))
+        shot.catch(() => {})
+        return enqueue(async () => {
+          const s = await shot
+          return addStep(event, tab.windowId, tab.id, s ? Promise.resolve(s) : null)
+        })
       }
       case 'preshot': {
         const st = await getState()

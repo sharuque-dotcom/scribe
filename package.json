@@ -1,7 +1,7 @@
 {
   "name": "stepcrumb",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Click through any website, capture annotated screenshots, and turn them into SOPs and training material.",
   "scripts": {
@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "e2e": "node tests/e2e.mjs && node tests/e2e-timing.mjs && node tests/e2e-video.mjs && node tests/e2e-pii.mjs && node tests/e2e-guideme.mjs",
+    "e2e": "node tests/e2e.mjs && node tests/e2e-timing.mjs && node tests/e2e-video.mjs && node tests/e2e-pii.mjs && node tests/e2e-guideme.mjs && node tests/e2e-qa-fixes.mjs",
     "e2e:ai": "VITE_AI=1 npm run build && node tests/e2e-ai.mjs",
     "e2e:voice": "node tests/e2e-voice-long.mjs",
     "icons": "node scripts/make-icons.mjs"

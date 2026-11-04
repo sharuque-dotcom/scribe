@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "StepCrumb",
   "short_name": "StepCrumb",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Click through any task once. Get a step-by-step guide, SOP, training and a narrated video. Private: all saved on your computer.",
   "action": {
     "default_popup": "popup.html",
