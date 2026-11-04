@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CONFIG } from '../config'
 import { HeroDemo } from './HeroDemo'
+import { APPS, EdgeIcon } from './Logos'
 import { CrumbMark } from './Crumbs'
 import { HeroScene, SceneClick, SceneEverything, SceneStart } from './Scenes'
 
@@ -120,26 +121,35 @@ export function Hero() {
   )
 }
 
-const PLACES = ['CRMs', 'ERPs', 'HR portals', 'Admin consoles', 'Banking dashboards', 'Ticketing tools', 'EHR systems', 'Spreadsheets', 'Marketing tools', 'Internal apps', 'Supplier portals', 'Government sites']
-
 export function Strip() {
   return (
-    <section className="border-y border-line bg-white/50 py-6" aria-label="Works anywhere">
+    <section className="border-y border-line py-7" aria-label="Works on the apps you already use">
+      <p className="eyebrow mb-5 px-5 text-center">Works on the apps your team already uses</p>
       <div className="relative overflow-hidden">
-        <div className="marquee flex w-max gap-10 whitespace-nowrap text-[15px] text-soft">
-          {[...PLACES, ...PLACES].map((p, i) => (
-            <span key={i} className="flex items-center gap-10">
-              {p}
-              <span className="text-ember" aria-hidden>
-                ●
-              </span>
-            </span>
+        <ul className="marquee flex w-max items-center gap-12">
+          {[...APPS, ...APPS].map((a, i) => (
+            <li key={i} className="group flex items-center gap-2.5 whitespace-nowrap" aria-hidden={i >= APPS.length}>
+              <svg viewBox="0 0 24 24" className="h-6 w-6 shrink-0 grayscale opacity-60 transition duration-300 group-hover:opacity-100 group-hover:grayscale-0" role="img" aria-label={a.name}>
+                <path d={a.d} fill={a.color} />
+              </svg>
+              <span className="text-[17px] font-semibold tracking-tight text-ink/55 transition-colors duration-300 group-hover:text-ink">{a.name}</span>
+            </li>
           ))}
-        </div>
+        </ul>
         <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-paper to-transparent" />
         <div className="pointer-events-none absolute inset-y-0 right-0 w-24 bg-gradient-to-l from-paper to-transparent" />
       </div>
-      <p className="mt-3 text-center text-[13px] text-soft">Works on any website you can open in Chrome or Edge.</p>
+      <p className="mt-5 flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 px-5 text-center text-[13px] text-soft">
+        Works on any website you can open in
+        <span className="inline-flex items-center gap-1 font-semibold text-ink">
+          <ChromeIcon className="h-4 w-4" /> Chrome
+        </span>
+        or
+        <span className="inline-flex items-center gap-1 font-semibold text-ink">
+          <EdgeIcon className="h-4 w-4" /> Edge.
+        </span>
+      </p>
+      <p className="mt-1 text-center text-[11px] text-soft/70">Product names and logos belong to their owners and don't imply endorsement.</p>
     </section>
   )
 }
