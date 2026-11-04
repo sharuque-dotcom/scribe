@@ -58,6 +58,7 @@ function init() {
     window.clearTimeout(idleTimer)
     if (!state.recording || state.paused || state.mode === 'video') return
     idleTimer = window.setTimeout(() => {
+      if (bar.hovered()) return
       chrome.runtime.sendMessage({ type: 'preshot', page: pageId, seq }).catch(() => {})
     }, 300)
   }
@@ -101,8 +102,18 @@ function init() {
   )
   chrome.runtime.onMessage.addListener((msg, _sender, reply) => {
     if (msg?.type === 'state') apply(msg.state as RecorderState)
+    if (msg?.type === 'flush') {
+      // Finishing: record what was typed in a field that's still focused, then answer.
+      void flushFields().then(() => reply({ ok: true }))
+      return true
+    }
     if (msg?.type === 'guide-run') player.run(msg.state as GuideMeState)
     if (msg?.type === 'prepareCapture') {
+      // A spare screenshot isn't worth hiding the bar from under the pointer.
+      if (msg.optional && bar.hovered()) {
+        reply({ skip: true })
+        return
+      }
       // Hide the bar and reply once a frame without it has been painted.
       // Also report secret fields as they are right now, since the user may
       // have typed since the click.
@@ -166,16 +177,34 @@ function init() {
     chrome.runtime.sendMessage({ type: 'cursor', samples: batch, rects, pii, at: Date.now() }).catch(() => {})
   }, 500)
 
-  async function send(event: CapturedEvent) {
+  // Steps sent and not yet answered (finishing waits for them).
+  const inflight = new Set<Promise<void>>()
+  function send(event: CapturedEvent): Promise<void> {
     bar.begin()
-    try {
-      // Send right away: a click that navigates may unload this page any moment.
-      await chrome.runtime.sendMessage({ type: 'capture', event })
-    } catch {
-      // Extension reloaded or page unloading; nothing to do.
-    } finally {
-      bar.end()
+    const p = (async () => {
+      try {
+        // Send right away: a click that navigates may unload this page any moment.
+        await chrome.runtime.sendMessage({ type: 'capture', event })
+      } catch {
+        // Extension reloaded or page unloading; nothing to do.
+      } finally {
+        bar.end()
+      }
+    })()
+    inflight.add(p)
+    void p.finally(() => inflight.delete(p))
+    return p
+  }
+
+  // Record typing still waiting in a focused field, and wait (briefly) until the
+  // extension has every step, so finishing from anywhere keeps the last step.
+  async function flushFields() {
+    if (active()) {
+      const f = document.activeElement
+      if (f && f !== document.body) settleField(f)
+      if (pendingField) settleField(pendingField.el)
     }
+    await Promise.race([Promise.all([...inflight]), new Promise((r) => setTimeout(r, 900))])
   }
 
   // Clicking into a text box or dropdown usually leads to typing or choosing a
@@ -514,6 +543,7 @@ function createBar(beforeAction: () => void = () => {}) {
       .discard{background:transparent;color:#9ca3af;padding:6px 8px}.discard:hover{background:#374151;color:#fff}
       .discard.sure{background:#7f1d1d;color:#fff}
       .min{background:transparent;color:#9ca3af;padding:6px 9px}.min:hover{background:#374151;color:#fff}
+      .finishing button{pointer-events:none}.finishing .pause,.finishing .discard{opacity:.4}
       .small .label,.small .pause,.small .discard,.small .stop{display:none}
     </style>
     <div class="bar" part="bar" role="toolbar" aria-label="StepCrumb capture">
@@ -533,18 +563,48 @@ function createBar(beforeAction: () => void = () => {}) {
   // Pressing a bar button mustn't move focus out of the page's field: the blur
   // would record the typing step mid-click and re-draw the bar, losing the click.
   root.querySelectorAll('button').forEach((b) => b.addEventListener('mousedown', (e) => e.preventDefault()))
-  root.querySelector('.stop')!.addEventListener('click', () => {
+  // Buttons act on the press itself, while they're certainly under the pointer:
+  // the bar hides for screenshots, and a press that ends after it hides would
+  // never become a click. Keyboard presses (Enter, Space) still come as clicks.
+  const onPress = (b: HTMLElement, act: () => void) => {
+    b.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return
+      e.preventDefault()
+      act()
+    })
+    b.addEventListener('click', (e) => {
+      if (e.detail === 0) act()
+    })
+  }
+  const stopBtn = root.querySelector('.stop') as HTMLButtonElement
+  let finishing = 0
+  onPress(stopBtn, () => {
+    if (finishing) return
     beforeAction()
-    void chrome.runtime.sendMessage({ type: 'stop' })
+    void chrome.runtime.sendMessage({ type: 'stop' }).catch(() => {})
+    // Show it's working; if the capture is somehow still running after a few
+    // seconds, let them press again.
+    barEl.classList.add('finishing')
+    stopBtn.textContent = 'Finishing…'
+    finishing = window.setTimeout(() => {
+      finishing = 0
+      barEl.classList.remove('finishing')
+      stopBtn.textContent = 'Finish'
+    }, 5000)
   })
-  pauseBtn.addEventListener('click', () => {
+  onPress(pauseBtn, () => {
     beforeAction()
-    void chrome.runtime.sendMessage({ type: 'togglePause' })
+    void chrome.runtime.sendMessage({ type: 'togglePause' }).catch(() => {})
   })
+
+  // While the pointer is on the bar, it isn't hidden for optional screenshots.
+  let hovered = false
+  host.addEventListener('pointerenter', () => (hovered = true))
+  host.addEventListener('pointerleave', () => (hovered = false))
 
   // Discard asks once more on the bar itself (no pop-up over the page).
   let sureTimer = 0
-  discardBtn.addEventListener('click', () => {
+  onPress(discardBtn, () => {
     if (discardBtn.classList.contains('sure')) {
       window.clearTimeout(sureTimer)
       beforeAction()
@@ -560,7 +620,7 @@ function createBar(beforeAction: () => void = () => {}) {
   })
 
   // Make smaller: just the dot, the time and the button to open it again.
-  minBtn.addEventListener('click', () => {
+  onPress(minBtn, () => {
     const small = barEl.classList.toggle('small')
     minBtn.textContent = small ? '+' : '–'
     minBtn.title = small ? 'Show controls' : 'Make smaller'
@@ -651,6 +711,10 @@ function createBar(beforeAction: () => void = () => {}) {
     },
     contains(e: Event) {
       return e.composedPath().includes(host)
+    },
+    // The pointer is on the bar (the person is about to press it).
+    hovered() {
+      return hovered
     },
     owns(node: Node) {
       return node === host || host.contains(node)

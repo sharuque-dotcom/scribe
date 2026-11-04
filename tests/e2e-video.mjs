@@ -46,6 +46,8 @@ const extId = new URL((await workerOf(ctx)).url()).host
 await ctx.close()
 ctx = await launch([`--allowlisted-extension-id=${extId}`])
 const sw = await workerOf(ctx)
+// Anonymous counts go to a stub, so tests never add to the real numbers.
+await ctx.route('https://www.stepcrumb.com/api/count', (r) => r.fulfill({ status: 202, body: '{"ok":true}' }))
 await fakeLicenseServer(ctx)
 
 // Moves the mouse in steps, like a person, so there's a cursor path to follow.

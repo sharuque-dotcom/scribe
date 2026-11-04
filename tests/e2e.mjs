@@ -35,7 +35,13 @@ const polar = await fakeLicenseServer(ctx)
 await ctx.route('https://buy.polar.sh/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<title>Checkout</title>' }))
 // Every request the extension makes (to check that only the license check goes online).
 const requests = []
-ctx.on('request', (r) => requests.push(r.url()))
+const counts = []
+ctx.on('request', (r) => {
+  requests.push(r.url())
+  if (r.url().startsWith('https://www.stepcrumb.com/api/count')) counts.push(r.postData())
+})
+// Anonymous counts go to a stub here, so tests never add to the real numbers.
+await ctx.route('https://www.stepcrumb.com/api/count', (r) => r.fulfill({ status: 202, body: '{"ok":true}' }))
 const extId = new URL(sw.url()).host
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 const check = (cond, msg) => {
@@ -249,7 +255,9 @@ try {
   // Network: only Polar (the license check) and the local test site.
   const outside = [...new Set(requests.map((u) => new URL(u)).filter((u) => /^https?:$/.test(u.protocol) && u.hostname !== 'localhost').map((u) => u.hostname))]
   console.log('   hosts contacted:', outside.join(', ') || '(none)')
-  check(outside.every((h) => h === 'api.polar.sh'), 'nothing but the license check goes online')
+  check(outside.every((h) => h === 'api.polar.sh' || h === 'www.stepcrumb.com'), 'nothing but the license check and anonymous counts goes online')
+  check(requests.filter((u) => u.includes('www.stepcrumb.com')).every((u) => u === 'https://www.stepcrumb.com/api/count'), 'stepcrumb.com is only contacted for counts')
+  check(counts.every((b) => { try { const o = JSON.parse(b ?? ''); return Object.keys(o).join() === 'e' && /^[a-z_]+$/.test(o.e) } catch { return false } }), `counts carry only an event name (${counts.length} sent: ${[...new Set(counts.map((b) => JSON.parse(b ?? '{}').e))].join(', ')})`)
 
   const popup = await ctx.newPage()
   await popup.setViewportSize({ width: 340, height: 420 })

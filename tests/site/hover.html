@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Hover CRM</title>
+<style>
+  body { font: 15px system-ui; margin: 0; }
+  .row { padding: 14px 20px; border-bottom: 1px solid #eee; }
+  .row.hot { background: #eef2ff; }
+  input { font: inherit; padding: 6px 8px; width: 260px; }
+</style>
+</head>
+<body>
+  <h1 style="padding: 0 20px">Contacts</h1>
+  <div style="padding: 0 20px 12px"><label>Name <input id="name" /></label></div>
+  <div id="rows"></div>
+  <script>
+    // Like many CRMs, rows highlight under the pointer, so moving the mouse changes the page.
+    const rows = document.getElementById('rows')
+    for (let i = 0; i < 30; i++) {
+      const r = document.createElement('div')
+      r.className = 'row'
+      r.textContent = 'Contact ' + (i + 1)
+      rows.appendChild(r)
+    }
+    document.addEventListener('mousemove', (e) => {
+      document.querySelectorAll('.row.hot').forEach((r) => r.classList.remove('hot'))
+      e.target.closest?.('.row')?.classList.add('hot')
+      document.body.dataset.x = String(e.clientX)
+    })
+  </script>
+</body>
+</html>

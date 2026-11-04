@@ -42,6 +42,8 @@ const extId = new URL(first.url()).host
 await ctx.close()
 ctx = await launch([`--allowlisted-extension-id=${extId}`])
 const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
+// Anonymous counts go to a stub, so tests never add to the real numbers.
+await ctx.route('https://www.stepcrumb.com/api/count', (r) => r.fulfill({ status: 202, body: '{"ok":true}' }))
 sw.on('console', (m) => m.type() !== 'log' && console.log('[sw]', m.text().slice(0, 300)))
 try {
   // Free plan: own words are saved but don't apply.

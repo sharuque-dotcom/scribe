@@ -53,24 +53,34 @@ interface Shot {
 
 // Ask the page to hide the capture bar and say which page it is. A page that
 // is navigating away won't answer, so don't wait long.
-async function prepare(tabId: number | undefined): Promise<{ redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number } | undefined> {
+type Prepared = { redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number; skip?: boolean }
+async function prepare(tabId: number | undefined, optional = false): Promise<Prepared | undefined> {
   if (tabId === undefined) return undefined
   const reply = await Promise.race([
-    chrome.tabs.sendMessage(tabId, { type: 'prepareCapture' }).catch(() => undefined),
+    chrome.tabs.sendMessage(tabId, { type: 'prepareCapture', optional }).catch(() => undefined),
     sleep(150).then(() => undefined),
   ])
-  return reply as { redactRects?: NRect[]; piiRects?: NRect[]; page?: string; seq?: number } | undefined
+  return reply as Prepared | undefined
 }
 
-async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
+// A spare screenshot the page declined (the pointer is on the capture bar).
+class Skipped extends Error {}
+
+// captureVisibleTab can wait a long time for a page that isn't repainting;
+// never let one screenshot hold up the steps after it (or finishing).
+const withTimeout = <T,>(p: Promise<T>, ms: number) =>
+  Promise.race([p, sleep(ms).then(() => Promise.reject(new Error('screenshot timed out')))])
+
+async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRect[] = [], optional = false): Promise<Shot> {
   for (let attempt = 0; ; attempt++) {
     const wait = lastCapture + MIN_GAP_MS - Date.now()
     if (wait > 0) await sleep(wait)
-    const reply = await prepare(tabId)
+    const reply = await prepare(tabId, optional)
+    if (reply?.skip) throw new Skipped()
     const redact = reply?.redactRects
     lastCapture = Date.now()
     try {
-      const raw = await chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 88 })
+      const raw = await withTimeout(chrome.tabs.captureVisibleTab(windowId, { format: 'jpeg', quality: 88 }), 3000)
       const bmp = await createImageBitmap(await (await fetch(raw)).blob())
       const size = { w: bmp.width, h: bmp.height }
       const secrets = redact ?? fallbackRedact
@@ -86,7 +96,7 @@ async function screenshot(windowId: number, tabId?: number, fallbackRedact: NRec
       bmp.close()
       return { dataUrl, ...size, redact, pii: reply?.piiRects, page: reply?.page, seq: reply?.seq }
     } catch (err) {
-      if (attempt >= 3) throw err
+      if (attempt >= 3 || (err instanceof Error && err.message === 'screenshot timed out')) throw err
     }
   }
 }
@@ -114,9 +124,9 @@ function storedShot(page: string, seq: number, exact: boolean): Shot | undefined
   return undefined
 }
 
-function capture(windowId: number, tabId?: number, fallbackRedact: NRect[] = []): Promise<Shot> {
+function capture(windowId: number, tabId?: number, fallbackRedact: NRect[] = [], optional = false): Promise<Shot> {
   capturing++
-  const shot = captureChain.then(() => screenshot(windowId, tabId, fallbackRedact))
+  const shot = captureChain.then(() => screenshot(windowId, tabId, fallbackRedact, optional))
   captureChain = shot.catch(() => {})
   return shot.then(
     (s) => {
@@ -165,7 +175,7 @@ function preshot(windowId: number, tabId: number, page?: string, seq?: number) {
     preshotTimers.set(tabId, setTimeout(() => preshot(windowId, tabId, page, seq), wait + 20))
     return
   }
-  capture(windowId, tabId).catch(() => {})
+  capture(windowId, tabId, [], true).catch(() => {})
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -192,7 +202,8 @@ async function addStep(event: CapturedEvent, windowId: number, tabId?: number, p
   // Video-only captures still record each step (it becomes a caption and a zoom)
   // but skip the screenshot.
   const shots = guide.mode !== 'video'
-  const shot = shots ? await (pendingShot ?? shotForEvent(windowId, tabId, event)) : null
+  // A screenshot that fails or times out leaves the step without one rather than losing it.
+  const shot = shots ? await (pendingShot ?? shotForEvent(windowId, tabId, event)).catch(() => null) : null
   const redact = shot?.redact
   const imageId = shot ? uid() : undefined
   if (shot && imageId) await putImage({ id: imageId, dataUrl: shot.dataUrl, w: shot.w, h: shot.h })
@@ -526,11 +537,25 @@ async function start(title?: string, opts: { mode?: CaptureMode; video?: boolean
 // Set while a recording is being finished, so closing the recorder tab as part
 // of finishing doesn't start a second stop.
 let stopping = false
+// The tab the last step came from (finishing asks it for pending typing).
+let lastStepTab: number | undefined
+
+// Before finishing, ask the pages being worked on to send typing that's still
+// waiting in a focused field (Finish from the popup or the shortcut doesn't
+// move focus, so the page wouldn't send it otherwise). Capped, so a page that
+// doesn't answer can't hold up finishing.
+async function flushPages(): Promise<void> {
+  const tabs = await chrome.tabs.query({ active: true }).catch(() => [] as chrome.tabs.Tab[])
+  const ids = new Set(tabs.map((t) => t.id).filter((id): id is number => id !== undefined))
+  if (lastStepTab !== undefined) ids.add(lastStepTab)
+  await Promise.race([Promise.all([...ids].map((id) => chrome.tabs.sendMessage(id, { type: 'flush' }).catch(() => null))), sleep(1200)])
+}
 
 async function stop(openEditor = true, reason?: string): Promise<RecorderState> {
   if (stopping) return getState()
   stopping = true
   try {
+    if ((await getState()).recording) await flushPages()
     return await finish(openEditor, reason)
   } finally {
     stopping = false
@@ -733,6 +758,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         return guideImage(msg.index as number)
       case 'capture': {
         if (sender.tab?.windowId === undefined) return null
+        lastStepTab = sender.tab.id
         const event = msg.event as CapturedEvent
         // Take the screenshot now, before the click can open another page;
         // writing the step waits its turn so steps stay in order. The step joins
@@ -742,7 +768,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         const shot = getState().then((st) => (st.recording && !st.paused && st.mode !== 'video' ? shotForEvent(tab.windowId, tab.id, event) : null))
         shot.catch(() => {})
         return enqueue(async () => {
-          const s = await shot
+          const s = await shot.catch(() => null)
           return addStep(event, tab.windowId, tab.id, s ? Promise.resolve(s) : null)
         })
       }

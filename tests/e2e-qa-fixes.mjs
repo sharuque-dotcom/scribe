@@ -20,6 +20,8 @@ const server = createServer((req, res) => {
 const ext = join(root, 'dist')
 const ctx = await chromium.launchPersistentContext('', { executablePath: process.env.CHROMIUM_PATH, headless: true, viewport: { width: 1280, height: 800 }, args: [`--disable-extensions-except=${ext}`, `--load-extension=${ext}`] })
 const sw = ctx.serviceWorkers()[0] ?? (await ctx.waitForEvent('serviceworker'))
+// Anonymous counts go to a stub, so tests never add to the real numbers.
+await ctx.route('https://www.stepcrumb.com/api/count', (r) => r.fulfill({ status: 202, body: '{"ok":true}' }))
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 const check = (cond, msg) => {
   if (!cond) throw new Error('FAILED: ' + msg)

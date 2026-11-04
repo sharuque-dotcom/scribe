@@ -10,8 +10,8 @@ import { activateLicense, LICENSE_CONFIG } from '../shared/license'
 const send = <T,>(msg: object) => chrome.runtime.sendMessage(msg) as Promise<T>
 const MODES: { id: CaptureMode; label: string; hint: string }[] = [
   { id: 'screenshots', label: 'Screenshots', hint: 'A step-by-step guide with a screenshot for every click.' },
-  { id: 'both', label: 'Screenshots + video', hint: 'The guide, plus a video of the same run.' },
-  { id: 'video', label: 'Video only', hint: 'A video with auto-zoom and captions. No screenshots.' },
+  { id: 'both', label: 'Screenshots + video', hint: 'The guide, plus a video of the same run. Steps come from clicks in the browser; with Window or Entire screen, the video also shows your other apps.' },
+  { id: 'video', label: 'Video only', hint: 'A video with auto-zoom and captions. No screenshots. Captions come from clicks in the browser; the video can show any app.' },
 ]
 
 const openEditor = (hash = '') => chrome.tabs.create({ url: chrome.runtime.getURL(`editor.html${hash}`) })
