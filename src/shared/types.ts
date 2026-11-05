@@ -135,6 +135,8 @@ export interface Guide {
   health?: GuideHealth
   // Guide me: steps it repaired after the app changed, not yet seen by the author.
   repaired?: { stepIds: string[]; at: number }
+  // Practice runs on this computer, newest first.
+  attempts?: PracticeAttempt[]
 }
 
 // ---------- video ----------
@@ -336,4 +338,30 @@ export interface GuideMeState {
   path?: string
   // How each step went in this play (by index).
   results?: Record<number, StepHealth>
+  // Practice: when it started, who is practising, the steps they needed a
+  // hint for ("Show me"), and wrong clicks.
+  startedAt?: number
+  learner?: string
+  hints?: number[]
+  mistakes?: number
+  // Steps that were already done when the guide got to them (not scored).
+  already?: number[]
+  // The practice result has been saved (so stopping or reloading doesn't save it twice).
+  finished?: boolean
+  attempt?: PracticeAttempt
+}
+
+// One practice run, kept with the guide as proof that someone can do the task.
+export interface PracticeAttempt {
+  id: string
+  at: number
+  learner: string
+  durationMs: number
+  // Steps to do (not notes or page visits), done without a hint, and with one.
+  steps: number
+  onOwn: number
+  hints: number
+  mistakes: number
+  skipped: number
+  completed: boolean
 }

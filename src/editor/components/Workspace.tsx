@@ -21,6 +21,7 @@ import { lockedToast } from '../upgrade'
 import { guideDocx, toBlob } from '../../shared/docx'
 import { StepCard } from './StepCard'
 import { VideoView } from './VideoView'
+import { PracticeResults } from './PracticeResults'
 
 export type Tab = 'steps' | 'preview' | DocKind | 'video'
 
@@ -79,13 +80,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
       return false
     }
   })
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem('stepcrumb.imported') === id) sessionStorage.removeItem('stepcrumb.imported')
-    } catch {
-      // Nothing to clear.
-    }
-  }, [id])
+
   const shotCount = guide ? guide.steps.filter((s) => s.imageId).length : 0
   const blurCount = guide ? guide.steps.reduce((n, s) => n + s.annotations.filter((a) => a.type === 'blur').length, 0) : 0
 
@@ -321,7 +316,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                         <Icon name="cap" />
                         <span>
                           <span className="block font-medium">Practice</span>
-                          <span className="block text-xs text-muted">Play it with Save, Submit, Pay and similar buttons stopped, so nothing is changed.</span>
+                          <span className="block text-xs text-muted">The learner does it on their own, with hints only when they ask. Gives a result and certificate. Save, Submit and Pay are stopped, so nothing is changed.</span>
                         </span>
                       </button>
                       <button
@@ -477,11 +472,22 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
                   <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-accent/30 bg-accent/5 px-4 py-3 text-sm" role="status">
                     <Icon name="play" className="h-4 w-4 flex-none text-accent" />
                     <span className="flex-1">Imported. Press <b>Guide me</b> to be walked through it on the website, or choose <b>Practice</b> from its menu to try it without changing anything.</span>
-                    <button className="font-semibold underline underline-offset-2" onClick={() => setImported(false)}>
+                    <button
+                      className="font-semibold underline underline-offset-2"
+                      onClick={() => {
+                        setImported(false)
+                        try {
+                          sessionStorage.removeItem('stepcrumb.imported')
+                        } catch {
+                          // Nothing to clear.
+                        }
+                      }}
+                    >
                       Got it
                     </button>
                   </div>
                 )}
+                <PracticeResults guide={guide} onClear={() => update((g) => ({ ...g, attempts: undefined }))} />
                 {guide.repaired && guide.repaired.stepIds.length > 0 && (
                   <div className="mt-3 flex flex-wrap items-center gap-3 rounded-2xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-900" role="status">
                     <Icon name="check" className="h-4 w-4 flex-none" />
@@ -640,7 +646,7 @@ export function Workspace({ id, tab }: { id: string; tab: Tab }) {
             <p>Send this file to a teammate (by email, Teams, Slack or a shared drive). They don't need an account, and nothing is installed for them except StepCrumb.</p>
             <ol className="list-decimal space-y-1.5 pl-5 text-muted">
               <li>They open StepCrumb's library and drop the file on it (or click Import).</li>
-              <li>The guide opens. They press <b className="text-ink">Guide me</b>, or <b className="text-ink">Practice</b> to try it without changing anything.</li>
+              <li>The guide opens. They press <b className="text-ink">Guide me</b>, or <b className="text-ink">Practice</b> to do it on their own and get a result they can show you. Nothing is changed in the app.</li>
             </ol>
             <p className="text-xs text-muted">The file includes the steps and the screenshots. Passwords are blurred for good, but other blurs travel as edits the person could remove, so don't share screenshots that show anything they shouldn't see.</p>
             <button

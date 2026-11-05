@@ -222,7 +222,7 @@ function Popup() {
               </span>
               <button
                 className="rounded-md px-2 py-1 text-xs font-medium text-muted hover:bg-surface hover:text-ink"
-                title="Try it with Save, Submit, Pay and similar buttons stopped"
+                title="Do it on your own, with hints only when you ask. You get a result, and nothing is changed"
                 onClick={async () => {
                   const res = await send<{ ok: boolean; error?: string }>({ type: 'guide-start', guideId: g.id, practice: true })
                   if (res?.ok) window.close()

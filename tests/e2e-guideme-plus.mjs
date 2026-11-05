@@ -176,6 +176,19 @@ try {
   // ---- 4 + 5 + 7. Already done, checking input, practice mode ----
   await page.goto(`${BASE}/crm.html?open=1`)
   await start(guideId, true)
+  // Practice starts by asking who's practising.
+  u = await waitFor(async () => {
+    const v = await ui(page)
+    return v?.title?.startsWith('Practise') ? v : null
+  })
+  check(!!u && u.buttons.includes('Start'), 'practice starts by asking for the learner\'s name')
+  await page.evaluate(() => {
+    const r = document.querySelector('[data-stepcrumb-guide]').shadowRoot
+    const input = r.querySelector('input.name')
+    input.value = 'Priya'
+    input.dispatchEvent(new Event('input'))
+  })
+  await clickCard(page, 'Start')
   u = await waitFor(async () => {
     const v = await ui(page)
     return v && v.title.includes('Stage') ? v : null
@@ -183,6 +196,7 @@ try {
   check(!!u, 'the form is already open and filled in, so it moves on to the Stage step')
   check(u && /already/.test(u.flash ?? ''), `it says the earlier steps were already done ("${u?.flash}")`)
   check(u?.practice, 'practice mode is shown on the card')
+  check(u && !u.ring && u.buttons.includes('Show me'), 'practice: no spotlight until the learner asks (Show me)')
   const results = (await gstate())?.results ?? {}
   check(results[iNew] === 'skipped' && (results[iName] === 'found' || results[iName] === 'repaired'), 'the skipped click is noted as skipped, the filled field as found')
   // Choose a different stage than the guide.
@@ -194,24 +208,28 @@ try {
   check(u && u.note.includes('“Customer”') && u.note.includes('“Lead”') && u.buttons.includes('Keep mine'), 'a different dropdown choice is pointed out ("The guide picked Customer; you picked Lead")')
   await clickCard(page, 'Keep mine')
   await waitFor(async () => (await gstate())?.index === iVip)
+  await pause(400)
+  // A wrong click counts as a mistake and gets a nudge.
+  await page.click('#stage')
+  await page.keyboard.press('Escape')
   u = await waitFor(async () => {
     const v = await ui(page)
-    return v?.ring ? v : null
+    return v?.note?.includes('Not quite') ? v : null
   })
+  check(u && u.note.includes('Stage'), `a wrong click is pointed out ("${u?.note}")`)
+  // Ask for a hint: the spotlight shows the checkbox.
+  await clickCard(page, 'Show me')
   u = await waitFor(async () => {
     const v = await ui(page)
     return v?.ring && v.under === 'vip' ? v : null
   })
+  check(!!u && !u.buttons.includes('Show me'), '"Show me" reveals where to click (counted as a hint)')
   await page.mouse.click(u.ring.x, u.ring.y)
   await waitFor(async () => (await gstate())?.index === iSave)
   // Empty the required name, then press Save: it points at the field instead.
   await page.fill('#name', '')
-  u = await waitFor(async () => {
-    const v = await ui(page)
-    return v?.ring && v.title.includes('Save') ? v : null
-  })
-  await page.mouse.click(u.ring.x, u.ring.y)
   await pause(300)
+  await page.click('#save')
   u = await waitFor(async () => {
     const v = await ui(page)
     return v?.note?.includes('Fill in') ? v : null
@@ -219,19 +237,29 @@ try {
   check(u && u.note.includes('“Full name”') && u.under === 'name', 'an empty required field is pointed out before Save ("Fill in “Full name”…")')
   await page.fill('#name', 'Jordan Lee')
   await pause(400)
+  await page.click('#save')
   u = await waitFor(async () => {
     const v = await ui(page)
-    return v?.ring && v.under === 'save' ? v : null
-  })
-  await page.mouse.click(u.ring.x, u.ring.y)
-  u = await waitFor(async () => {
-    const v = await ui(page)
-    return v?.title?.startsWith('Done') ? v : null
+    return v?.note?.includes('Completed in') ? v : null
   })
   check(!!u && /Practice/.test(u.flash ?? ''), 'practice: Save counts as done and says it wasn\'t sent')
   check((await page.evaluate(() => window.saves)) === 0 && (await page.textContent('#status')) === '', 'practice: the app never received the Save')
+  check(u && /2 of 3 steps on your own/.test(u.note) && /1 hint/.test(u.note) && /1 mistake/.test(u.note) && !/skipped/.test(u.note), `the result says how it went, not counting steps that were already done ("${u?.note}")`)
+  await page.screenshot({ path: join(root, 'tests/output/practice-result.png') })
+  const [cert] = await Promise.all([page.waitForEvent('download'), clickCard(page, 'Download certificate')])
+  const certHtml = readFileSync(await cert.path(), 'utf8')
+  const certPage = await ctx.newPage()
+  await certPage.setContent(certHtml)
+  await certPage.screenshot({ path: join(root, 'tests/output/practice-certificate.png'), fullPage: true })
+  await certPage.close()
+  await page.bringToFront()
+  check(certHtml.includes('Priya') && certHtml.includes('Add a contact') && certHtml.includes('Hints used'), 'the learner can download a certificate with their name and result')
+  guide = await getGuide(guideId)
+  const attempt = guide.attempts?.[0]
+  check(attempt && attempt.learner === 'Priya' && attempt.completed && attempt.hints === 1 && attempt.mistakes === 1, 'the practice result is saved with the guide')
   await clickCard(page, 'Close')
   await pause(300)
+  check(((await getGuide(guideId)).attempts ?? []).length === 1, 'closing the result does not save it twice')
 
   // ---- 6. Off track ----
   await page.goto(`${BASE}/crm.html`)
@@ -270,6 +298,7 @@ try {
   })
   check(!!chip, `the guide page shows the health score ("${chip}")`)
   check((await editor.getByText(/repaired 1 step after the app changed/).count()) === 1 && (await editor.getByText('Repaired by Guide me').count()) === 1, 'the guide page says a step was repaired, and marks it')
+  check((await editor.getByRole('region', { name: 'Practice results' }).getByText('Priya').count()) === 1 && (await editor.getByRole('button', { name: 'Certificate' }).count()) === 1, 'the guide page lists the practice result with its certificate')
   await editor.screenshot({ path: join(root, 'tests/output/guideme-health.png') })
 
   // ---- 9. Share by file, import by dropping it on the library ----

@@ -9,6 +9,7 @@ import { loadAutoBlur } from '../shared/autoblur'
 import { maskPii, PII_PHRASE, wholePii } from '../shared/pii'
 import { deleteChunks, deleteGuide, deleteImage, getGuide, getImage, listGuides, putGuide, putImage } from '../shared/db'
 import { checkedOf, elementSteps, expectedOf, guidePages, pageKey } from '../shared/guideme'
+import { attemptOf } from '../shared/practice'
 import type { Annotation, CaptureMode, CapturedEvent, CursorSample, Guide, GuideMeState, Locator, NRect, RecordSource, RecorderState, RedactSample, Step, StepHealth, VideoRecording } from '../shared/types'
 import { DEFAULT_VIDEO_SETTINGS, uid } from '../shared/types'
 
@@ -687,6 +688,7 @@ async function guideStart(guideId: string, opts: { practice?: boolean } = {}): P
     steps: guide.steps.map((s) => ({ stepId: s.id, kind: s.kind, title: s.title, detail: s.detail, action: s.action, url: s.url, locator: s.locator, hasImage: !!s.imageId, expected: expectedOf(s), checked: checkedOf(s) })),
     practice: !!opts.practice,
     results: {},
+    startedAt: Date.now(),
   }
   await setGuideState(state)
   // Start now if the page is ready; a page that's still loading asks when it is.
@@ -715,6 +717,18 @@ async function healStep(g: GuideMeState, index: number, locator: Locator): Promi
   const steps = g.steps.map((s, i) => (i === index ? { ...s, locator } : s))
   await setGuideState({ ...g, steps, results: { ...(g.results ?? {}), [index]: 'repaired' } })
   return null
+}
+
+// A practice run, kept with the guide as proof (newest first, up to 100).
+async function saveAttempt(g: GuideMeState) {
+  if (g.finished && g.attempt) return g.attempt
+  const attempt = attemptOf(g)
+  await setGuideState({ ...g, finished: attempt.completed, attempt })
+  const guide = await getGuide(g.guideId)
+  if (!guide) return attempt
+  guide.attempts = [attempt, ...(guide.attempts ?? [])].slice(0, 100)
+  await putGuide(guide)
+  return attempt
 }
 
 // How this play went, step by step, for the guide's health score.
@@ -959,7 +973,21 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'guide-heal':
         return guideHeal(msg.index as number, msg.locator as Locator)
       case 'guide-finish':
-        await changeGuide((g) => saveHealth(g))
+        return changeGuide(async (g) => {
+          await saveHealth(g)
+          return g.practice ? saveAttempt(g) : null
+        })
+      case 'guide-practice-start':
+        await changeGuide((g) => setGuideState({ ...g, learner: String(msg.learner ?? ''), startedAt: Date.now(), hints: [], mistakes: 0 }))
+        return null
+      case 'guide-hint':
+        await changeGuide((g) => setGuideState({ ...g, hints: [...new Set([...(g.hints ?? []), msg.index as number])] }))
+        return null
+      case 'guide-already':
+        await changeGuide((g) => setGuideState({ ...g, already: [...new Set([...(g.already ?? []), ...((msg.indices as number[]) ?? [])])] }))
+        return null
+      case 'guide-mistake':
+        await changeGuide((g) => setGuideState({ ...g, mistakes: (g.mistakes ?? 0) + 1 }))
         return null
       case 'guide-check':
         return checkGuide(msg.guideId as string)
@@ -971,6 +999,8 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
       case 'guide-stop':
         await changeGuide(async (g) => {
           await saveHealth(g)
+          // A practice someone started and gave up on is recorded too (as not finished).
+          if (g.practice && g.learner && !g.finished && Object.keys(g.results ?? {}).length) await saveAttempt(g)
           await setGuideState(null)
         })
         return null

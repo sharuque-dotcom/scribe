@@ -12,10 +12,15 @@
 // - Checking: a different dropdown choice is pointed out; empty required
 //   fields are flagged before Save.
 // - Off track: leaving the step's page offers to go back.
-// - Practice: final actions (Save, Submit, Pay…) are stopped before they reach the app.
+// - Practice: the learner does each step on their own; the spotlight only shows
+//   when they ask ("Show me", counted as a hint), wrong clicks are counted, and
+//   final actions (Save, Submit, Pay…) are stopped before they reach the app.
+//   The result can be downloaded as a certificate.
 import type { GuideMeState, GuideMeStep, StepHealth } from '../shared/types'
 import { confidentMatch, repairedLocator } from '../shared/locate'
 import { isFinalAction } from '../shared/guideme'
+import { certificateHtml, resultLine } from '../shared/practice'
+import type { PracticeAttempt } from '../shared/types'
 import { findMatch, pageBusy, type Match } from './locator'
 
 type Send = (msg: object) => Promise<unknown>
@@ -65,6 +70,9 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
       button.p{background:#4f46e5;color:#fff}
       button.p:hover{background:#4338ca}
       button.b:focus-visible,.x:focus-visible{outline:2px solid #a5b4fc;outline-offset:1px}
+      .name{all:unset;display:block;box-sizing:border-box;width:100%;margin-top:10px;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:14px;color:#0f172a;background:#fff}
+      .name:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.2)}
+      .stats{margin-top:10px;font-size:13px;color:#334155}
       .hidden{display:none}
     </style>
     <div class="dim hidden"></div>
@@ -110,11 +118,39 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
   let carry: string | null = null
   // The last step's final action was stopped (practice), so the page didn't move on.
   let held = false
+  // Practice: the spotlight for this step has been asked for ("Show me").
+  let revealed = false
+  const quietPractice = () => !!st?.practice && !revealed && !detour
 
   // The page changing (not our overlay) means it may still be loading.
   new MutationObserver((records) => {
     if (records.some((r) => r.target !== host && !host.contains(r.target as Node))) lastBusy = Date.now()
   }).observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'aria-busy'] })
+
+  // Practice: a click on another button or field than the step's is a mistake.
+  // Final actions (Save, Submit, Pay…) are stopped wherever they are.
+  const INTERACTIVE = 'a[href],button,input,select,textarea,summary,label,[role=button],[role=link],[role=menuitem],[role=tab],[role=checkbox],[role=radio],[role=option],[role=switch],[role=combobox]'
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!st?.practice || gone || !target) return
+      const s = st.steps[st.index]
+      if (!s || s.kind !== 'step') return
+      const path = e.composedPath()
+      if (path.includes(host) || path.includes(target) || (detour && path.includes(detour))) return
+      const el = (path[0] instanceof Element ? path[0] : null)?.closest(INTERACTIVE)
+      if (!el || (el instanceof HTMLLabelElement && el.control === target)) return
+      const name = labelFor(el) || el.textContent?.trim().slice(0, 40) || 'that'
+      if (isFinalAction(name)) {
+        e.preventDefault()
+        e.stopImmediatePropagation()
+      }
+      st = { ...st, mistakes: (st.mistakes ?? 0) + 1 }
+      void send({ type: 'guide-mistake' })
+      say(`Not quite: that was “${name}”. Try again, or press Show me.`, 'warn')
+    },
+    true,
+  )
 
   const button = (label: string, run: () => void, primary = false) => {
     const b = document.createElement('button')
@@ -156,6 +192,7 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
     if (!st) return
     const from = st.index
     cleanup()
+    revealed = false
     const results = { ...(st.results ?? {}) }
     if (result && index > from) results[from] = result
     for (const i of skippedTo ?? []) results[i] = 'skipped'
@@ -205,7 +242,13 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
       lookingSince = Date.now()
     }
     const el = detour?.isConnected ? detour : target
-    spotlight(el ? el.getBoundingClientRect() : null)
+    if (quietPractice() && st?.steps[st.index]?.kind === 'step') {
+      // Practice: no spotlight and no dimming until they ask for a hint.
+      show(dim, false)
+      show(hole, false)
+      show(ring, false)
+      place(null)
+    } else spotlight(el ? el.getBoundingClientRect() : null)
     raf = requestAnimationFrame(follow)
   }
 
@@ -425,6 +468,68 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
     return null
   }
 
+  // Steps already done when the guide got to them: not held against a learner.
+  function markAlready(indices: number[]) {
+    if (!st) return
+    st = { ...st, already: [...new Set([...(st.already ?? []), ...indices])] }
+    void send({ type: 'guide-already', indices })
+  }
+
+  // Practice: a hint. The spotlight shows where to go, and it's counted.
+  function showMe(s: GuideMeStep) {
+    if (!st || step() !== s) return
+    revealed = true
+    if (!(st.hints ?? []).includes(st.index)) {
+      st = { ...st, hints: [...(st.hints ?? []), st.index] }
+      void send({ type: 'guide-hint', index: st.index })
+    }
+    for (const b of buttons.querySelectorAll('button')) if (b.textContent === 'Show me') b.remove()
+    if (!target) say('Looking for it on the page…')
+  }
+
+  // Practice starts here: who's practising, and how it works.
+  function askName() {
+    spotlight(null)
+    show(dim, false)
+    count.textContent = 'Practice'
+    show(practiceTag, true)
+    title.textContent = `Practise "${st!.title}"`
+    detail.textContent = 'Do each step yourself. StepCrumb watches, and shows you where to go only if you press Show me. Save, Submit, Pay and similar buttons are stopped, so nothing is changed.'
+    show(detail, true)
+    show(flash, false)
+    show(note, false)
+    show(shot, false)
+    progress.style.width = '0%'
+    const input = document.createElement('input')
+    input.className = 'name'
+    input.placeholder = 'Your name (for your result)'
+    input.setAttribute('aria-label', 'Your name')
+    chrome.storage.local.get('learnerName').then(({ learnerName }) => {
+      if (typeof learnerName === 'string' && !input.value) input.value = learnerName
+    }, () => {})
+    const begin = () => {
+      if (!st) return
+      const learner = input.value.trim() || 'Someone'
+      void chrome.storage.local.set({ learnerName: input.value.trim() }).catch(() => {})
+      input.remove()
+      off = null
+      st = { ...st, learner, startedAt: Date.now(), hints: [], mistakes: 0 }
+      void send({ type: 'guide-practice-start', learner })
+      render()
+    }
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation()
+      if (e.key === 'Enter') begin()
+    })
+    buttons.replaceChildren(button('Start', begin, true))
+    detail.after(input)
+    place(null)
+    setTimeout(() => input.focus(), 50)
+    // The input goes when practice starts.
+    const removeInput = () => input.remove()
+    off = removeInput
+  }
+
   function render() {
     if (!st || gone) return
     const s = step()
@@ -433,9 +538,9 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
       cleanup()
       spotlight(null)
       show(dim, false)
-      count.textContent = 'Guide me'
+      count.textContent = st.practice ? 'Practice result' : 'Guide me'
       show(practiceTag, !!st.practice)
-      title.textContent = `Done! You completed "${st.title}".`
+      title.textContent = st.practice ? `You finished "${st.title}".` : `Done! You completed "${st.title}".`
       show(detail, false)
       flash.textContent = carry ?? ''
       show(flash, !!carry)
@@ -445,10 +550,28 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
       progress.style.width = '100%'
       buttons.replaceChildren(button('Close', () => stop(true), true))
       place(null)
-      void send({ type: 'guide-finish' })
+      const guideTitle = st.title
+      void send({ type: 'guide-finish' }).then((a) => {
+        const attempt = a as PracticeAttempt | null
+        if (!attempt || gone) return
+        say(resultLine(attempt).replace('on their own', 'on your own'), attempt.onOwn === attempt.steps && !attempt.mistakes ? 'good' : '')
+        buttons.replaceChildren(
+          button('Download certificate', () => {
+            const a = document.createElement('a')
+            a.href = URL.createObjectURL(new Blob([certificateHtml(attempt, guideTitle)], { type: 'text/html' }))
+            a.download = `Practice result - ${guideTitle.replace(/[\\/:*?"<>|]/g, '')}.html`
+            a.click()
+            setTimeout(() => URL.revokeObjectURL(a.href), 4000)
+          }),
+          button('Close', () => stop(true), true),
+        )
+        place(null)
+      })
       return
     }
     if (!host.isConnected) document.documentElement.appendChild(host)
+    // Practice starts by asking who's practising (for the result).
+    if (st.practice && !st.learner) return askName()
     fill(s)
 
     // Notes and headings: just read and go on.
@@ -500,6 +623,7 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
       void send({ type: 'guide-path', path: location.pathname })
     }
 
+    if (st.practice) buttons.append(button('Show me', () => showMe(s)))
     buttons.append(button('Skip', () => next('skipped')))
     lookingSince = Date.now()
     lastBusy = Date.now()
@@ -520,6 +644,7 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
         match = m
         if (fellBack || waiting) {
           fill(s)
+          if (st?.practice && !revealed) buttons.append(button('Show me', () => showMe(s)))
           buttons.append(button('Skip', () => next('skipped')))
           fellBack = false
           waiting = false
@@ -527,6 +652,7 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
         // Already done (the field holds the guide's value): tick it and go on.
         if (alreadyDone(s, m.el)) {
           window.clearInterval(poll)
+          markAlready([st!.index])
           carry = `Step ${st!.index + 1} was already done.`
           const result = outcome()
           say('Already done ✓', 'good')
@@ -549,6 +675,7 @@ export function createPlayer(send: Send, labelFor: (el: Element) => string) {
         if (ahead !== null) {
           window.clearInterval(poll)
           const skipped = Array.from({ length: ahead - st!.index }, (_, k) => st!.index + k)
+          markAlready(skipped)
           carry = skipped.length === 1 ? `You're already here, so step ${st!.index + 1} was skipped.` : `You're already here, so steps ${st!.index + 1}–${ahead} were skipped.`
           go(ahead, undefined, skipped)
           return
