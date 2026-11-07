@@ -2,9 +2,9 @@
 export const CONFIG = {
   // Polar checkout: Lifetime, Monthly and Yearly on one page.
   checkoutUrl: 'https://buy.polar.sh/polar_cl_ImqGIEAjftim5l45evDJ9hyB5WhthHn6747Pn1IkbMt',
-  // Chrome Web Store / Edge Add-ons listing (until published, point to a waitlist or the zip).
-  chromeStoreUrl: '#install',
-  edgeStoreUrl: '#install',
+  // The Chrome Web Store listing. Edge installs from it too ("Allow extensions from other stores").
+  chromeStoreUrl: 'https://chromewebstore.google.com/detail/stepcrumb/mlhgnmpcjpbiobhkpcholmipmgmjiphj',
+  edgeStoreUrl: 'https://chromewebstore.google.com/detail/stepcrumb/mlhgnmpcjpbiobhkpcholmipmgmjiphj',
   founding: { price: 49, limit: 1000 },
   // How many founding licenses are sold. Leave null to hide the counter
   // (only show a real number).

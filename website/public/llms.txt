@@ -1,6 +1,6 @@
 # StepCrumb
 
-> StepCrumb is a free Chrome and Edge extension that turns one click-through of a task into a step-by-step guide with screenshots, an SOP, a training module and a narrated video with auto-zoom. Personal details are blurred automatically, there is no account, and screenshots and recordings stay on the user's computer.
+> StepCrumb is a free Chrome and Edge extension, available in the Chrome Web Store, that turns one click-through of a task into a step-by-step guide with screenshots, an SOP, a training module and a narrated video with auto-zoom. Personal details are blurred automatically, there is no account, and screenshots and recordings stay on the user's computer.
 
 ## What it does
 - Press Start, do the task in the browser as usual, press Finish. Every click, field and choice becomes a step with a screenshot, a highlight and plain-language text.
@@ -32,6 +32,7 @@ Operations, support, training and IT teams, consultants and anyone who writes ho
 - Choose a team-cloud tool instead if you need a shared online library, sharing links, comments or SSO; StepCrumb shares by exported files.
 
 ## Links
+- [Install from the Chrome Web Store](https://chromewebstore.google.com/detail/stepcrumb/mlhgnmpcjpbiobhkpcholmipmgmjiphj) (Chrome and Microsoft Edge)
 - [Home](https://www.stepcrumb.com/)
 - [FAQ](https://www.stepcrumb.com/#faq)
 - [Pricing](https://www.stepcrumb.com/#pricing)

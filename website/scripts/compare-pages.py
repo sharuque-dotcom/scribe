@@ -4,6 +4,7 @@
 import html, json, pathlib
 
 CHECKED = '4 November 2026'
+STORE = 'https://chromewebstore.google.com/detail/stepcrumb/mlhgnmpcjpbiobhkpcholmipmgmjiphj'
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ONLINE = 'No. StepCrumb saves screenshots and videos in your browser on your computer. It goes online only to check a Pro license key and, unless you switch it off, to send anonymous counts such as "1 guide made", never what you capture.'
 
@@ -120,7 +121,8 @@ CHROME_SM = _chrome_svg('h-4 w-4 flex-none')
 CHROME = _chrome_svg('h-5 w-5 flex-none')
 
 def with_chrome(s):
-  # Puts the Chrome logo in every install button (idempotent).
+  # Points install buttons at the Chrome Web Store, and puts the Chrome logo in them (idempotent).
+  s = s.replace('href="/#install"', f'href="{STORE}"')
   s = s.replace('text-paper hover:opacity-90">Add to Chrome, it\'s free</a>', 'text-paper hover:opacity-90">' + CHROME_SM + 'Add to Chrome, it\'s free</a>')
   s = s.replace('class="btn-dark px-7 py-3.5 text-[16px]">Try StepCrumb free</a>', 'class="btn-dark px-7 py-3.5 text-[16px]">' + CHROME + 'Add to Chrome, it\'s free</a>')
   s = s.replace('hover:-translate-y-0.5">Add StepCrumb to Chrome</a>', 'hover:-translate-y-0.5">' + CHROME + 'Add StepCrumb to Chrome</a>')
@@ -173,7 +175,7 @@ def page(p):
           <svg viewBox="0 0 64 64" class="h-8 w-8" aria-hidden="true"><rect width="64" height="64" rx="16" fill="#151412" /><circle cx="18" cy="44" r="6" fill="#F97316" /><circle cx="32" cy="32" r="7.5" fill="#FAF8F4" /><circle cx="46" cy="18" r="9" fill="#818CF8" /></svg>
           <span class="text-[19px] font-semibold tracking-tight">StepCrumb</span>
         </a>
-        <a href="/#install" class="ml-auto inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper hover:opacity-90">Add to Chrome, it's free</a>
+        <a href="{STORE}" class="ml-auto inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-sm font-semibold text-paper hover:opacity-90">Add to Chrome, it's free</a>
       </nav>
     </header>
 
@@ -183,7 +185,7 @@ def page(p):
         <h1 class="display mx-auto max-w-4xl text-[44px] sm:text-[72px]">{e(a)}<span class="bg-gradient-to-r from-brand via-violet-500 to-ember bg-clip-text text-transparent">{e(hl)}</span>{e(b)}</h1>
         <p class="mx-auto mt-6 max-w-2xl text-[18px] leading-relaxed text-soft sm:text-[20px]">{e(p['lead'])}</p>
         <div class="mt-9 flex flex-wrap justify-center gap-3">
-          <a href="/#install" class="btn-dark px-7 py-3.5 text-[16px]">Try StepCrumb free</a>
+          <a href="{STORE}" class="btn-dark px-7 py-3.5 text-[16px]">Try StepCrumb free</a>
           <a href="#table" class="btn-ghost px-7 py-3.5 text-[16px]">See the comparison</a>
         </div>
         <p class="mt-4 text-[13px] text-soft">Checked against {e(p['name'])}'s public pricing page on {CHECKED}.</p>
@@ -236,7 +238,7 @@ def page(p):
       <section class="mb-16 rounded-[40px] bg-ink px-6 py-20 text-center text-paper sm:px-12">
         <h2 class="display mx-auto max-w-3xl text-[40px] sm:text-[60px]">Leave a trail anyone can follow.</h2>
         <p class="mx-auto mt-4 max-w-xl text-[18px] text-paper/80">Free, no account, nothing uploaded.</p>
-        <a href="/#install" class="btn mt-8 bg-paper px-7 py-3.5 text-[16px] text-ink hover:-translate-y-0.5">Add StepCrumb to Chrome</a>
+        <a href="{STORE}" class="btn mt-8 bg-paper px-7 py-3.5 text-[16px] text-ink hover:-translate-y-0.5">Add StepCrumb to Chrome</a>
       </section>
     </main>
 

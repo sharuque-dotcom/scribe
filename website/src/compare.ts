@@ -7,6 +7,12 @@ import { inject } from '@vercel/analytics'
 // Vercel Web Analytics: page views only, no cookies, nothing personal.
 inject()
 
+// Count clicks on "Add to Chrome" (just the click: no cookies, nothing personal).
+document.addEventListener('click', (e) => {
+  const a = (e.target as Element | null)?.closest?.('a[href*="chromewebstore.google.com"]')
+  if (a) navigator.sendBeacon?.('/api/count', new Blob([JSON.stringify({ e: 'install_click' })], { type: 'application/json' }))
+})
+
 if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && window.matchMedia('(pointer: fine)').matches) {
   let n = 0
   window.addEventListener('pointerdown', (e) => {
