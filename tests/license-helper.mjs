@@ -29,6 +29,8 @@ export async function fakeLicenseServer(ctx) {
 export async function activateInSettings(page, check) {
   await page.getByRole('button', { name: 'Upgrade to Pro' }).first().click()
   await page.getByRole('dialog', { name: 'Change your plan' }).waitFor()
+  // The plan cards show once the plan has loaded.
+  await page.getByRole('dialog').getByRole('button', { name: 'Upgrade to Pro' }).first().waitFor({ timeout: 10000 }).catch(() => {})
   const ups = await page.getByRole('dialog').getByRole('button', { name: 'Upgrade to Pro' }).allTextContents()
   check(ups.length === 1, `the plans window offers Upgrade to Pro (${JSON.stringify(ups)})`)
   check((await page.getByRole('button', { name: 'Get lifetime' }).count()) === 1, 'the plans window offers lifetime access')
