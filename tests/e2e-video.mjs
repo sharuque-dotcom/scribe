@@ -184,6 +184,7 @@ try {
   await editor.getByRole('button', { name: 'Delete zoom' }).click()
   check((await editor.locator('[title="Zoom"]').count()) === zoomsBefore, 'a zoom can be deleted')
 
+
   // Narration override changes the caption text.
   await editor.getByLabel('Narration for step 5').fill('Now sign in.')
   await pause(400)
@@ -242,9 +243,50 @@ try {
     return { vt, at, dur }
   }
 
+  // Cut a section out of the middle: mark the start, move on, mark the end.
+  const lengthOf = async () => {
+    const [, total] = (await timeText()).split(' / ')
+    const [m, sec] = total.split(':').map(Number)
+    return m * 60 + sec
+  }
+  const fullLen = await lengthOf()
+  const seekTo = async (fraction) => {
+    const box = await editor.locator('div[class*="h-20"][class*="select-none"]').boundingBox()
+    await editor.mouse.click(box.x + box.width * fraction, box.y + 4)
+    await pause(300)
+  }
+  await seekTo(0.3)
+  await editor.getByRole('button', { name: 'Start cut here' }).click()
+  await seekTo(0.55)
+  await editor.getByRole('button', { name: /^End cut here/ }).click()
+  await pause(500)
+  check((await editor.locator('[aria-label="Cut section"]').count()) === 1, 'a section can be cut out of the middle')
+  const cut = await editor.evaluate(async (id) => {
+    const db = await new Promise((r) => { const q = indexedDB.open('scribe'); q.onsuccess = () => r(q.result) })
+    const g = await new Promise((r) => { const q = db.transaction('guides').objectStore('guides').get(id); q.onsuccess = () => r(q.result) })
+    return g.video.cuts
+  }, guideId)
+  const cutMs = cut[0].end - cut[0].start
+  const cutLen = await lengthOf()
+  console.log(`   cut: ${(cutMs / 1000).toFixed(1)}s, length ${fullLen}s -> ${cutLen}s`)
+  check(cut.length === 1 && Math.abs(cutMs - info.video.duration * 0.25) < 1500, 'the cut is saved with the guide')
+  check(Math.abs(fullLen - cutLen - cutMs / 1000) <= 1.5, 'the video gets shorter by the cut')
+  await editor.locator('[aria-label="Cut section"]').click()
+  check(await editor.getByText('Cut section', { exact: true }).isVisible(), 'selecting a cut shows its details')
+  await editor.locator('canvas[aria-label="Video preview"]').screenshot({ path: join(out, 'v6-cut-preview.png') })
+  await editor.locator('div[class*="h-20"][class*="select-none"]').locator('..').screenshot({ path: join(out, 'v6-cut-timeline.png') })
+
   const free = await exportAndRead('free', 'Export video (720p)')
   check(free.vt.displayWidth === 1280 && free.vt.displayHeight === 720, 'free plan: video exports at 720p')
   if (withVoice) check(!!free.at, 'free plan: voiceover included with the free voice')
+  // Export makes the voice first, and narration can add short freezes, so
+  // compare with the length the editor shows now.
+  const shownLen = await lengthOf()
+  check(Math.abs(free.dur - shownLen) <= 1.5, `the exported video matches the edited length (${free.dur.toFixed(1)}s, editor ${shownLen}s)`)
+  await editor.getByRole('button', { name: 'Restore all cuts' }).click()
+  await pause(400)
+  const restoredLen = await lengthOf()
+  check((await editor.locator('[aria-label="Cut section"]').count()) === 0 && restoredLen >= shownLen + cutMs / 1000 - 1.5, `Restore all cuts brings the cut part back (${shownLen}s -> ${restoredLen}s)`)
 
   // ---------- Paid plan ----------
   await activateInSettings(editor, check)

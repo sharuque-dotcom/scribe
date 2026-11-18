@@ -202,7 +202,16 @@ export interface GuideVideo {
   trimStart: number
   // Unset means the end of the recording.
   trimEnd?: number
+  // Sections cut out of the middle (recording time, ms). Left out of the
+  // preview, the export, the captions and the voice.
+  cuts?: VideoCut[]
   settings: VideoSettings
+}
+
+export interface VideoCut {
+  id: string
+  start: number
+  end: number
 }
 
 export const DEFAULT_VIDEO_SETTINGS: VideoSettings = {

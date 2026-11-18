@@ -253,29 +253,59 @@ export interface TimeMap {
   toOutput(src: number): number
 }
 
-export function timeMap(holds: Hold[], trimStart: number, trimEnd: number): TimeMap {
-  const hs = holds.filter((h) => h.at >= trimStart && h.at < trimEnd).sort((a, b) => a.at - b.at)
-  const total = hs.reduce((a, h) => a + h.dur, 0)
+// The parts of the recording that are kept: the trimmed range minus any cuts.
+export function keptRanges(trimStart: number, trimEnd: number, cuts: { start: number; end: number }[] = []): [number, number][] {
+  const cs = cuts
+    .map((c) => [clamp(Math.min(c.start, c.end), trimStart, trimEnd), clamp(Math.max(c.start, c.end), trimStart, trimEnd)] as [number, number])
+    .filter(([a, b]) => b > a)
+    .sort((x, y) => x[0] - y[0])
+  const out: [number, number][] = []
+  let cur = trimStart
+  for (const [a, b] of cs) {
+    if (a > cur) out.push([cur, a])
+    cur = Math.max(cur, b)
+  }
+  if (trimEnd > cur || !out.length) out.push([cur, Math.max(cur, trimEnd)])
+  return out
+}
+
+// Output time <-> recording time: plays the kept ranges one after another, with
+// the freezes (holds) inside them.
+export function timeMap(holds: Hold[], trimStart: number, trimEnd: number, cuts: { start: number; end: number }[] = []): TimeMap {
+  type Piece = { play: true; from: number; to: number } | { play: false; at: number; dur: number }
+  const pieces: Piece[] = []
+  for (const [a, b] of keptRanges(trimStart, trimEnd, cuts)) {
+    let cur = a
+    for (const h of holds.filter((h) => h.at >= a && h.at < b).sort((x, y) => x.at - y.at)) {
+      pieces.push({ play: true, from: cur, to: h.at }, { play: false, at: h.at, dur: h.dur })
+      cur = h.at
+    }
+    pieces.push({ play: true, from: cur, to: b })
+  }
+  const len = (p: Piece) => (p.play ? p.to - p.from : p.dur)
+  const outDuration = pieces.reduce((a, p) => a + len(p), 0)
+  const lastTo = [...pieces].reverse().find((p): p is Piece & { play: true } => p.play)?.to ?? trimEnd
   return {
-    outDuration: Math.max(0, trimEnd - trimStart) + total,
+    outDuration,
     toOutput(src) {
-      const s = clamp(src, trimStart, trimEnd)
-      let o = s - trimStart
-      for (const h of hs) if (h.at < s) o += h.dur
+      let o = 0
+      for (const p of pieces) {
+        if (p.play) {
+          if (src < p.from) return o
+          if (src < p.to) return o + (src - p.from)
+        } else if (src <= p.at) return o
+        o += len(p)
+      }
       return o
     },
     toSource(out) {
-      let cur = trimStart
       let o = 0
-      for (const h of hs) {
-        const len = h.at - cur
-        if (out < o + len) return cur + (out - o)
-        o += len
-        cur = h.at
-        if (out < o + h.dur) return h.at
-        o += h.dur
+      for (const p of pieces) {
+        const l = len(p)
+        if (out < o + l) return p.play ? p.from + (out - o) : p.at
+        o += l
       }
-      return Math.min(trimEnd, cur + Math.max(0, out - o))
+      return lastTo
     },
   }
 }
@@ -328,7 +358,7 @@ export function drawsSmoothCursor(video: { source?: string; cursorInVideo?: bool
 }
 
 export function planVideo(
-  video: { duration: number; source?: string; cursorInVideo?: boolean; cursor: CursorSample[]; zooms?: ZoomSegment[]; trimStart: number; trimEnd?: number; settings: { zoomScale: number; smoothCursor?: boolean } },
+  video: { duration: number; source?: string; cursorInVideo?: boolean; cursor: CursorSample[]; zooms?: ZoomSegment[]; trimStart: number; trimEnd?: number; cuts?: { start: number; end: number }[]; settings: { zoomScale: number; smoothCursor?: boolean } },
   steps: Step[],
   voiceMs: Record<string, number> = {},
 ): VideoPlan {
@@ -338,9 +368,12 @@ export function planVideo(
   const zooms = video.zooms ?? autoZooms(steps, duration, video.settings.zoomScale)
   const tracks = buildTracks(video.cursor, steps, duration)
   if (!drawsSmoothCursor(video)) tracks.hasCursor = false
-  const captions = buildCaptions(steps, duration).filter((c) => c.end > trimStart && c.start < trimEnd && c.text)
+  const cuts = (video.cuts ?? []).filter((c) => c.end > c.start)
+  const inCut = (t: number) => cuts.some((c) => t >= c.start && t < c.end)
+  // A step whose action was cut out has no caption or voice.
+  const captions = buildCaptions(steps, duration).filter((c) => c.end > trimStart && c.start < trimEnd && c.text && !inCut(c.start))
   const holds = buildHolds(captions, voiceMs, duration)
-  const map = timeMap(holds, trimStart, trimEnd)
+  const map = timeMap(holds, trimStart, trimEnd, cuts)
   const voice = captions.filter((c) => voiceMs[c.stepId]).map((c) => ({ stepId: c.stepId, at: map.toOutput(c.start) + VOICE_DELAY_MS }))
   const cues = captions.map((c) => {
     const start = map.toOutput(c.start)

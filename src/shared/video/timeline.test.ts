@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Step } from '../types'
-import { autoZooms, buildCaptions, buildHolds, buildTracks, cameraAt, cueAt, drawsSmoothCursor, planVideo, timeMap, toSrt, toVtt, trackAt, zoomAt, ZOOM_IN_MS } from './timeline'
+import { autoZooms, buildCaptions, buildHolds, buildTracks, cameraAt, cueAt, drawsSmoothCursor, keptRanges, planVideo, timeMap, toSrt, toVtt, trackAt, zoomAt, ZOOM_IN_MS } from './timeline'
 
 const step = (id: string, time: number, over: Partial<Step> = {}): Step => ({
   id,
@@ -94,6 +94,26 @@ describe('captions and freezes', () => {
     expect(m.toOutput(3100)).toBe(3600)
     expect(m.toSource(99999)).toBe(9500)
   })
+  it('leaves cut sections out', () => {
+    // Keep 0-2s, cut 2-5s, keep 5-8s, cut 8-10s (overlapping cuts merge).
+    const m = timeMap([], 0, 10000, [{ start: 2000, end: 4000 }, { start: 3500, end: 5000 }, { start: 8000, end: 12000 }])
+    expect(m.outDuration).toBe(5000)
+    expect(m.toSource(1999)).toBe(1999)
+    expect(m.toSource(2000)).toBe(5000)
+    expect(m.toSource(4999)).toBe(7999)
+    expect(m.toSource(99999)).toBe(8000)
+    expect(m.toOutput(3000)).toBe(2000) // inside a cut: where the cut is
+    expect(m.toOutput(6000)).toBe(3000)
+    expect(keptRanges(0, 10000, [{ start: 2000, end: 4000 }, { start: 3500, end: 5000 }, { start: 8000, end: 12000 }])).toEqual([[0, 2000], [5000, 8000]])
+  })
+  it('keeps freezes inside the kept parts, and a cut that removes everything leaves nothing', () => {
+    const m = timeMap([{ at: 6000, dur: 1000 }, { at: 3000, dur: 500 }], 0, 10000, [{ start: 2000, end: 5000 }])
+    expect(m.outDuration).toBe(7000 + 1000)
+    expect(m.toSource(3000)).toBe(6000)
+    expect(m.toSource(3500)).toBe(6000) // frozen
+    expect(m.toSource(4100)).toBe(6100)
+    expect(timeMap([], 0, 4000, [{ start: 0, end: 4000 }]).outDuration).toBe(0)
+  })
 })
 
 describe('planVideo', () => {
@@ -105,6 +125,13 @@ describe('planVideo', () => {
     // Caption a stays up through the freeze until step b.
     expect(p.cues[0]).toMatchObject({ start: 1000, end: 4450 })
     expect(p.cues[1].start).toBe(4450)
+  })
+  it('drops the caption and voice of a step that was cut out', () => {
+    const steps = [step('a', 1000), step('b', 3000), step('c', 5000)]
+    const p = planVideo({ duration: 7000, cursor: [], trimStart: 0, cuts: [{ start: 2500, end: 4000 }], settings: { zoomScale: 1.8 } }, steps, { a: 500, b: 500, c: 500 })
+    expect(p.cues.map((c) => c.stepId)).toEqual(['a', 'c'])
+    expect(p.map.outDuration).toBe(5500)
+    expect(p.cues[1].start).toBe(3500)
   })
 })
 

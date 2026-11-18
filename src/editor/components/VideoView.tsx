@@ -2,7 +2,7 @@ import { count } from '../../shared/telemetry'
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import { getVideo, type VoiceClip } from '../../shared/db'
 import { download, slug } from '../../shared/export'
-import type { Guide, GuideVideo, Step, VideoBackground, ZoomSegment } from '../../shared/types'
+import type { Guide, GuideVideo, Step, VideoBackground, VideoCut, ZoomSegment } from '../../shared/types'
 import { uid } from '../../shared/types'
 import { captionAlpha, drawFrame, layoutFor, outputSize, redactAt } from '../../shared/video/compose'
 import { exportVideo } from '../../shared/video/export'
@@ -73,6 +73,9 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const [askExport, setAskExport] = useState(false)
   const [exporting, setExporting] = useState<number | null>(null)
   const [selZoom, setSelZoom] = useState<string | null>(null)
+  const [selCut, setSelCut] = useState<string | null>(null)
+  // Where a cut being marked starts (recording time), until "End cut here".
+  const [markIn, setMarkIn] = useState<number | null>(null)
   const videoEl = useRef<HTMLVideoElement>(null)
   const canvas = useRef<HTMLCanvasElement>(null)
   const abort = useRef<AbortController | null>(null)
@@ -236,6 +239,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
     e.stopPropagation()
     e.preventDefault()
     setSelZoom(z.id)
+    setSelCut(null)
     const x0 = e.clientX
     const orig = { ...z }
     const onMove = (ev: PointerEvent) => {
@@ -249,6 +253,63 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
           }
           if (mode === 'start') return { ...s, start: Math.max(0, Math.min(orig.end - 800, orig.start + d)) }
           return { ...s, end: Math.min(video.duration, Math.max(orig.start + 800, orig.end + d)) }
+        }),
+      )
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  // ---------- cuts (sections left out of the middle) ----------
+
+  const cuts = video.cuts ?? []
+  const editCuts = (fn: (c: VideoCut[]) => VideoCut[]) =>
+    patchVideo({ cuts: fn(cuts.map((c) => ({ ...c }))).filter((c) => c.end - c.start >= 100).sort((a, b) => a.start - b.start) })
+  const addCut = (a: number, b: number) => {
+    const id = uid()
+    const start = Math.round(Math.max(0, Math.min(a, b)))
+    const end = Math.round(Math.min(video.duration, Math.max(a, b)))
+    editCuts((cs) => [...cs, { id, start, end }])
+    setSelCut(id)
+    setSelZoom(null)
+    // Show the moment just after the cut.
+    setPlaying(false)
+  }
+  // First press marks where the cut starts; the second, where it ends.
+  const markCut = () => {
+    setPlaying(false)
+    if (markIn === null) {
+      setMarkIn(srcNow)
+      return
+    }
+    const a = markIn
+    setMarkIn(null)
+    if (Math.abs(srcNow - a) < 200) addCut(a, Math.min(video.duration, a + 2000))
+    else addCut(a, srcNow)
+  }
+  const dragCut = (e: RPointerEvent, c: VideoCut, mode: 'move' | 'start' | 'end') => {
+    e.stopPropagation()
+    e.preventDefault()
+    setSelCut(c.id)
+    setSelZoom(null)
+    setPlaying(false)
+    const x0 = e.clientX
+    const orig = { ...c }
+    const onMove = (ev: PointerEvent) => {
+      const d = pxToMs(ev.clientX - x0)
+      editCuts((cs) =>
+        cs.map((s) => {
+          if (s.id !== c.id) return s
+          if (mode === 'move') {
+            const start = Math.round(Math.max(0, Math.min(video.duration - (orig.end - orig.start), orig.start + d)))
+            return { ...s, start, end: start + (orig.end - orig.start) }
+          }
+          if (mode === 'start') return { ...s, start: Math.round(Math.max(0, Math.min(orig.end - 200, orig.start + d))) }
+          return { ...s, end: Math.round(Math.min(video.duration, Math.max(orig.start + 200, orig.end + d))) }
         }),
       )
     }
@@ -282,6 +343,8 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
   const srcNow = plan.map.toSource(outT)
   const pct = (ms: number) => `${(ms / video.duration) * 100}%`
   const selected = plan.zooms.find((z) => z.id === selZoom)
+  const selectedCut = cuts.find((c) => c.id === selCut)
+  const removedMs = plan.trimStart + (video.duration - plan.trimEnd) + cuts.reduce((a, c) => a + Math.max(0, Math.min(c.end, plan.trimEnd) - Math.max(c.start, plan.trimStart)), 0)
 
   // ---------- voice, export ----------
 
@@ -406,14 +469,33 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
 
           {/* Timeline */}
           <div className="mt-5 rounded-[20px] border border-line bg-surface p-4">
-            <div className="mb-1 flex items-center justify-between text-xs text-muted">
-              <span>Timeline · drag zoom blocks to move them, drag their edges to resize, drag the white handles to trim</span>
+            <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted">
+              <span className="mr-auto">Timeline · drag the white handles to trim the ends, cut out parts in the middle, drag blocks to move or resize them</span>
+              <button
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-semibold ${markIn === null ? 'bg-rec/10 text-rec hover:bg-rec/15' : 'bg-rec text-white hover:bg-rec/90'}`}
+                onClick={markCut}
+                disabled={!url}
+                title={markIn === null ? 'Marks where the cut starts. Move to where it should end, then press again.' : 'Cuts out everything from the mark to here.'}
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+                  <circle cx="6" cy="6" r="3" />
+                  <circle cx="6" cy="18" r="3" />
+                  <path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12" />
+                </svg>
+                {markIn === null ? 'Start cut here' : `End cut here (from ${fmt(plan.map.toOutput(markIn))})`}
+              </button>
+              {markIn !== null && (
+                <button className="font-medium text-muted hover:text-ink" onClick={() => setMarkIn(null)}>
+                  Cancel
+                </button>
+              )}
               <button
                 className="font-medium text-accent hover:underline"
                 onClick={() => {
                   const id = uid()
                   editZooms((zs) => [...zs, { id, start: Math.max(0, srcNow - 800), end: Math.min(video.duration, srcNow + 2200), scale: settings.zoomScale }])
                   setSelZoom(id)
+                  setSelCut(null)
                 }}
               >
                 + Add zoom here
@@ -426,6 +508,7 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                 const r = e.currentTarget.getBoundingClientRect()
                 const src = ((e.clientX - r.left) / r.width) * video.duration
                 setSelZoom(null)
+                setSelCut(null)
                 setPlaying(false)
                 seek(plan.map.toOutput(src))
               }}
@@ -433,11 +516,12 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
               {/* Trimmed-away parts */}
               <div className="absolute inset-y-0 left-0 rounded-l-lg bg-ink/20" style={{ width: pct(plan.trimStart) }} />
               <div className="absolute inset-y-0 right-0 rounded-r-lg bg-ink/20" style={{ width: `calc(100% - ${pct(plan.trimEnd)})` }} />
+              {markIn !== null && <div className="pointer-events-none absolute inset-y-0 w-0 border-l-2 border-dashed border-rec" style={{ left: pct(markIn) }} />}
               {/* Step markers */}
               {steps
                 .filter((s): s is Step & { time: number } => s.kind === 'step' && typeof s.time === 'number')
                 .map((s, i) => (
-                  <div key={s.id} className="absolute top-1.5 -translate-x-1/2" style={{ left: pct(s.time) }} title={s.title}>
+                  <div key={s.id} className={`absolute top-1.5 -translate-x-1/2 ${cuts.some((c) => s.time >= c.start && s.time < c.end) ? 'opacity-40' : ''}`} style={{ left: pct(s.time) }} title={cuts.some((c) => s.time >= c.start && s.time < c.end) ? `${s.title} (cut out)` : s.title}>
                     <div className="grid h-5 w-5 place-items-center rounded-full bg-ember text-[10px] font-bold text-white ring-2 ring-white">{i + 1}</div>
                   </div>
                 ))}
@@ -455,12 +539,72 @@ function VideoEditor({ guide, video, update, toast }: Props & { video: GuideVide
                   <div className="absolute inset-y-0 right-0 w-2 cursor-ew-resize" onPointerDown={(e) => dragZoom(e, z, 'end')} />
                 </div>
               ))}
+              {/* Cut-out sections */}
+              {cuts.map((c) => (
+                <div
+                  key={c.id}
+                  className={`absolute inset-y-0 cursor-grab border-x-2 ${c.id === selCut ? 'border-rec bg-rec/25' : 'border-rec/70 bg-rec/15'}`}
+                  style={{ left: pct(c.start), width: pct(c.end - c.start), backgroundImage: 'repeating-linear-gradient(135deg, rgba(220,38,38,.18) 0 6px, transparent 6px 12px)' }}
+                  onPointerDown={(e) => dragCut(e, c, 'move')}
+                  title={`Cut: ${fmt(c.end - c.start)} left out`}
+                  aria-label="Cut section"
+                >
+                  <div className="absolute inset-y-0 -left-1.5 w-3 cursor-ew-resize" onPointerDown={(e) => dragCut(e, c, 'start')} />
+                  <div className="absolute inset-y-0 -right-1.5 w-3 cursor-ew-resize" onPointerDown={(e) => dragCut(e, c, 'end')} />
+                </div>
+              ))}
               {/* Trim handles */}
               <div className="absolute inset-y-0 w-2 -translate-x-1/2 cursor-ew-resize rounded bg-white shadow ring-1 ring-ink/30" style={{ left: pct(plan.trimStart) }} onPointerDown={(e) => dragTrim(e, 'start')} aria-label="Trim start" />
               <div className="absolute inset-y-0 w-2 -translate-x-1/2 cursor-ew-resize rounded bg-white shadow ring-1 ring-ink/30" style={{ left: pct(plan.trimEnd) }} onPointerDown={(e) => dragTrim(e, 'end')} aria-label="Trim end" />
               {/* Playhead */}
               <div className="pointer-events-none absolute inset-y-0 w-0.5 bg-rec" style={{ left: pct(srcNow) }} />
             </div>
+            {selectedCut && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-rec/30 bg-rec/5 px-3 py-2 text-xs">
+                <span className="font-semibold text-rec">Cut section</span>
+                <span className="text-muted">
+                  {fmt(selectedCut.start)}–{fmt(selectedCut.end)} of the recording · {fmt(selectedCut.end - selectedCut.start)} left out
+                </span>
+                <button
+                  className="font-medium text-accent hover:underline"
+                  onClick={() => {
+                    setPlaying(false)
+                    seek(Math.max(0, plan.map.toOutput(selectedCut.start) - 2000))
+                    setPlaying(true)
+                  }}
+                >
+                  Play across the cut
+                </button>
+                <button
+                  className="ml-auto font-medium text-rec hover:underline"
+                  onClick={() => {
+                    editCuts((cs) => cs.filter((c) => c.id !== selectedCut.id))
+                    setSelCut(null)
+                  }}
+                >
+                  Restore this part
+                </button>
+              </div>
+            )}
+            {(cuts.length > 0 || removedMs > 0) && (
+              <div className="mt-2 flex items-center gap-3 text-xs text-muted">
+                <span>
+                  {cuts.length ? `${cuts.length} cut${cuts.length === 1 ? '' : 's'} · ` : ''}
+                  {fmt(removedMs)} left out · the video is now {fmt(plan.map.outDuration)}
+                </span>
+                {cuts.length > 0 && (
+                  <button
+                    className="ml-auto font-medium hover:text-ink"
+                    onClick={() => {
+                      patchVideo({ cuts: [] })
+                      setSelCut(null)
+                    }}
+                  >
+                    Restore all cuts
+                  </button>
+                )}
+              </div>
+            )}
             {selected && (
               <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-3 py-2 text-xs">
                 <span className="font-semibold">Selected zoom</span>
