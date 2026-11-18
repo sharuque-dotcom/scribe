@@ -596,7 +596,9 @@ async function finish(openEditor: boolean, reason?: string): Promise<RecorderSta
           if (reason) guide.video.endReason = reason
         }
         // No usable video (e.g. it failed to save): keep the guide, drop the video.
-        else guide.video = undefined
+        // A video that ended earlier (Stop sharing, while screenshots carried on)
+        // was already saved with its length, so it stays.
+        else if (!(guide.video.duration > 0)) guide.video = undefined
       }
       guide.status = 'ready'
       guide.updatedAt = Date.now()
